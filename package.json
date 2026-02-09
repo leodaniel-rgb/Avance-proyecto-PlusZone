@@ -1,0 +1,15 @@
+{
+  "name": "pluszone-root",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "install-server": "npm --prefix Full-Stack-Project--main/server install",
+    "server:dev": "npm --prefix Full-Stack-Project--main/server run dev",
+    "server:start": "node Full-Stack-Project--main/server/index.js",
+    "migrate": "node Full-Stack-Project--main/server/init_db.js",
+    "start": "npm run server:start"
+  },
+  "engines": {
+    "node": ">=16"
+  }
+}

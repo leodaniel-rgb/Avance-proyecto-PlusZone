@@ -1,0 +1,78 @@
+{
+  "users": [
+    {
+      "id": 1,
+      "email": "admin@pluszone.com",
+      "password": "admin123",
+      "name": "Administrador",
+      "user_type": "admin",
+      "image_url": "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400&h=400&fit=crop",
+      "description": "Usuario administrador del sistema",
+      "tech_stack": ["Admin", "Management", "System"],
+      "created_at": "2024-01-01T00:00:00Z",
+      "is_active": true
+    },
+    {
+      "id": 2,
+      "email": "admin2@pluszone.com",
+      "password": "admin123",
+      "name": "Admin Secundario",
+      "user_type": "admin",
+      "image_url": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&h=400&fit=crop",
+      "description": "Segundo usuario administrador",
+      "tech_stack": ["Admin", "Management"],
+      "created_at": "2024-01-01T00:00:00Z",
+      "is_active": true
+    }
+  ],
+  "profiles": [
+    {
+      "id": 1,
+      "user_id": 1,
+      "name": "María García",
+      "description": "Senior Full Stack Developer",
+      "detailed_description": "Desarrolladora con más de 8 años de experiencia en aplicaciones web modernas. Especializada en React, Node.js y arquitectura de microservicios.",
+      "tech_stack": ["React", "Node.js", "TypeScript", "PostgreSQL", "AWS", "Docker"],
+      "salary": "$80,000 - $120,000",
+      "image_url": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&h=400&fit=crop",
+      "role": "candidate"
+    },
+    {
+      "id": 2,
+      "user_id": 3,
+      "name": "Juan Gonzalez",
+      "description": "Frontend Developer",
+      "detailed_description": "Especialista en React y accesibilidad.",
+      "tech_stack": ["React", "Accessibility", "HTML", "CSS"],
+      "salary": "$60,000 - $90,000",
+      "image_url": "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=400&h=400&fit=crop",
+      "role": "candidate"
+    },
+    {
+      "id": 3,
+      "user_id": 4,
+      "name": "Sofía Ramírez",
+      "description": "Ingeniera Industrial",
+      "detailed_description": "Optimización de procesos y mejora continua.",
+      "tech_stack": ["Lean", "Six Sigma", "Project Management"],
+      "salary": "$70,000 - $100,000",
+      "image_url": "https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=400&h=400&fit=crop",
+      "role": "candidate"
+    },
+    {
+      "id": 4,
+      "user_id": 5,
+      "name": "TechCorp - Vacante Backend",
+      "description": "Vacante Backend Senior",
+      "detailed_description": "Buscamos backenders con experiencia en microservicios y AWS",
+      "tech_stack": ["Java", "Spring", "AWS"],
+      "salary": "$90,000 - $140,000",
+      "image_url": "https://images.unsplash.com/photo-1542744173-8e7e53415bb0?w=400&h=400&fit=crop",
+      "role": "job"
+    }
+  ],
+  "swipes": [],
+  "matches": [],
+  "messages": []
+}
+

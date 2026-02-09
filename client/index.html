@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PlusZone - Tinder meets LinkedIn</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Pantalla de Carga -->
+    <div class="loading-screen" id="loadingScreen">
+        <div class="loading-content">
+            <div class="logo-container">
+                <div class="logo">PZ</div>
+                <h1 class="logo-text">
+                    <span class="title-accent">Plus</span>Zone
+                </h1>
+            </div>
+            <div class="loading-spinner"></div>
+        </div>
+    </div>
+
+    <!-- Pantalla de Login/Registro -->
+    <div class="auth-screen" id="authScreen" style="display: none;">
+        <div class="auth-container">
+            <div class="auth-header">
+                <div class="logo">PZ</div>
+                <h1 class="auth-title">
+                    <span class="title-accent">Plus</span>Zone
+                </h1>
+                <p class="auth-subtitle">Conecta con talento profesional</p>
+            </div>
+
+            <div class="auth-tabs">
+                <button class="auth-tab active" id="loginTab" onclick="switchAuthTab('login')">Iniciar Sesión</button>
+                <button class="auth-tab" id="registerTab" onclick="switchAuthTab('register')">Registrarse</button>
+            </div>
+
+            <!-- Formulario de Login -->
+            <form class="auth-form active" id="loginForm" onsubmit="handleLogin(event)">
+                <div class="form-group">
+                    <label for="loginEmail">Correo electrónico</label>
+                    <input type="email" id="loginEmail" placeholder="tu@email.com" required>
+                </div>
+                <div class="form-group">
+                    <label for="loginPassword">Contraseña</label>
+                    <input type="password" id="loginPassword" placeholder="••••••••" required>
+                </div>
+                <div class="user-type-selector">
+                    <label class="radio-label">
+                        <input type="radio" name="userType" value="employee" checked>
+                        <span>👤 Empleado</span>
+                    </label>
+                    <label class="radio-label">
+                        <input type="radio" name="userType" value="company">
+                        <span>🏢 Empresa</span>
+                    </label>
+                </div>
+                <button type="submit" class="auth-button">Iniciar Sesión</button>
+            </form>
+
+            <!-- Formulario de Registro -->
+            <form class="auth-form" id="registerForm" onsubmit="handleRegister(event)" style="display: none;">
+                <div class="form-group">
+                    <label for="registerName">Nombre completo</label>
+                    <input type="text" id="registerName" placeholder="Tu nombre" required>
+                </div>
+                <div class="form-group">
+                    <label for="registerEmail">Correo electrónico</label>
+                    <input type="email" id="registerEmail" placeholder="tu@email.com" required>
+                </div>
+                <div class="form-group">
+                    <label for="registerPassword">Contraseña</label>
+                    <input type="password" id="registerPassword" placeholder="••••••••" required>
+                </div>
+                <div class="user-type-selector">
+                    <label class="radio-label">
+                        <input type="radio" name="registerUserType" value="employee" checked>
+                        <span>👤 Empleado</span>
+                    </label>
+                    <label class="radio-label">
+                        <input type="radio" name="registerUserType" value="company">
+                        <span>🏢 Empresa</span>
+                    </label>
+                </div>
+                <button type="submit" class="auth-button">Registrarse</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Aplicación Principal -->
+    <div id="app" style="display: none;">
+        <!-- Overlay para móvil -->
+        <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleMobileMenu()"></div>
+        
+        <!-- Sidebar Izquierdo -->
+        <aside class="sidebar sidebar-left" id="leftSidebar">
+            <div class="sidebar-content">
+                <div class="sidebar-header">
+                    <div class="logo">PZ</div>
+                    <h2 class="sidebar-title">
+                        <span class="title-accent">Plus</span>Zone
+                    </h2>
+                </div>
+                <nav class="sidebar-nav" id="mainNav">
+                    <!-- Navegación para Empleado -->
+                    <div id="employeeNav" style="display: none;">
+                        <button class="nav-item active" onclick="showSection('discover')">
+                            <span class="nav-icon">🔍</span>
+                            <span class="nav-text">Descubrir Ofertas</span>
+                        </button>
+                        <button class="nav-item" onclick="showSection('matches')">
+                            <span class="nav-icon">💚</span>
+                            <span class="nav-text">Mis Matches</span>
+                        </button>
+                        <button class="nav-item" onclick="showSection('messages')">
+                            <span class="nav-icon">💬</span>
+                            <span class="nav-text">Mensajes</span>
+                        </button>
+                        <button class="nav-item" onclick="showSection('dashboard')">
+                            <span class="nav-icon">📊</span>
+                            <span class="nav-text">Dashboard</span>
+                        </button>
+                    </div>
+                    <!-- Navegación para Empresa -->
+                    <div id="companyNav" style="display: none;">
+                        <button class="nav-item active" onclick="showSection('discover')">
+                            <span class="nav-icon">👥</span>
+                            <span class="nav-text">Buscar Candidatos</span>
+                        </button>
+                        <button class="nav-item" onclick="showSection('matches')">
+                            <span class="nav-icon">💚</span>
+                            <span class="nav-text">Matches</span>
+                        </button>
+                        <button class="nav-item" onclick="showSection('jobs')">
+                            <span class="nav-icon">💼</span>
+                            <span class="nav-text">Mis Ofertas</span>
+                        </button>
+                        <button class="nav-item" onclick="showSection('messages')">
+                            <span class="nav-icon">💬</span>
+                            <span class="nav-text">Mensajes</span>
+                        </button>
+                        <button class="nav-item" onclick="showSection('dashboard')">
+                            <span class="nav-icon">📊</span>
+                            <span class="nav-text">Dashboard</span>
+                        </button>
+                    </div>
+                </nav>
+                <div class="sidebar-footer">
+                    <button class="nav-item" onclick="showSection('profile')">
+                        <span class="nav-icon">👤</span>
+                        <span class="nav-text">Mi Perfil</span>
+                    </button>
+                    <button class="nav-item" onclick="handleLogout()">
+                        <span class="nav-icon">🚪</span>
+                        <span class="nav-text">Cerrar Sesión</span>
+                    </button>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Contenido Principal -->
+        <div class="main-content">
+            <header class="feed-header">
+                <button class="mobile-menu-button" id="mobileMenuButton" onclick="toggleMobileMenu()" aria-label="Menú">
+                    <span class="menu-icon">☰</span>
+                </button>
+                <div class="header-content">
+                    <h1 class="feed-title">
+                        <span class="title-accent">Plus</span>Zone
+                    </h1>
+                    <p class="feed-subtitle">
+                        Conecta con talento profesional de forma innovadora
+                    </p>
+                </div>
+                <div class="user-info" id="userInfo">
+                    <span id="userName"></span>
+                    <span class="user-badge" id="userBadge"></span>
+                </div>
+            </header>
+
+            <main class="feed-main">
+                <!-- Sección de Descubrir -->
+                <div class="section active" id="discoverSection">
+                    <!-- Filtro de Categorías -->
+                    <div class="category-filter" id="categoryFilter">
+                        <label for="categorySelect" class="filter-title">Filtrar por categoría:</label>
+                        <select id="categorySelect" class="category-select" onchange="filterByCategory(this.value)">
+                            <!-- Se generarán dinámicamente -->
+                        </select>
+                    </div>
+                    
+                    <div class="swipe-container" id="swipeContainer">
+                        <div class="cards-stack" id="cardsStack">
+                            <!-- Las tarjetas se generarán dinámicamente -->
+                        </div>
+                        <!-- Contenedor para paneles de detalles -->
+                        <div class="card-details-container" id="cardDetailsContainer">
+                            <!-- Los paneles se generarán dinámicamente -->
+                        </div>
+
+                        <div class="swipe-actions">
+                            <button class="action-button action-pass" id="passButton" aria-label="Pasar">
+                                ✕
+                            </button>
+                            <button class="action-button action-interested" id="interestedButton" aria-label="Interesado">
+                                ♥
+                            </button>
+                        </div>
+
+                        <div class="swipe-container-empty" id="emptyState" style="display: none;">
+                            <h2>¡No hay más perfiles disponibles!</h2>
+                            <p>Vuelve más tarde para ver nuevos candidatos y ofertas.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sección de Dashboard -->
+                <div class="section" id="dashboardSection" style="display: none;">
+                    <div class="dashboard-container">
+                        <h2 class="section-title">Dashboard</h2>
+                        <!-- Dashboard para Empleado -->
+                        <div id="employeeDashboard" style="display: none;">
+                            <div class="stats-grid">
+                                <div class="stat-card">
+                                    <div class="stat-card-icon">📊</div>
+                                    <div class="stat-card-content">
+                                        <h3>Perfil Completado</h3>
+                                        <p class="stat-card-value" id="profileCompletion">75%</p>
+                                    </div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-card-icon">💚</div>
+                                    <div class="stat-card-content">
+                                        <h3>Matches Totales</h3>
+                                        <p class="stat-card-value" id="totalMatches">0</p>
+                                    </div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-card-icon">👁️</div>
+                                    <div class="stat-card-content">
+                                        <h3>Perfiles Vistos</h3>
+                                        <p class="stat-card-value" id="profilesViewed">0</p>
+                                    </div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-card-icon">⭐</div>
+                                    <div class="stat-card-content">
+                                        <h3>Puntuación</h3>
+                                        <p class="stat-card-value">4.5/5</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="dashboard-content-grid">
+                                <div class="dashboard-card">
+                                    <h3>Actividad Reciente</h3>
+                                    <div class="activity-timeline" id="activityTimeline">
+                                        <div class="timeline-item">
+                                            <span class="timeline-time">Hace 2 horas</span>
+                                            <p>Has hecho match con una oferta de trabajo</p>
+                                        </div>
+                                        <div class="timeline-item">
+                                            <span class="timeline-time">Hace 5 horas</span>
+                                            <p>Has actualizado tu perfil</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="dashboard-card">
+                                    <h3>Recomendaciones</h3>
+                                    <p class="empty-message">Basado en tu perfil, te recomendamos completar tu stack tecnológico</p>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Dashboard para Empresa -->
+                        <div id="companyDashboard" style="display: none;">
+                            <div class="stats-grid">
+                                <div class="stat-card">
+                                    <div class="stat-card-icon">💼</div>
+                                    <div class="stat-card-content">
+                                        <h3>Ofertas Activas</h3>
+                                        <p class="stat-card-value" id="activeJobs">0</p>
+                                    </div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-card-icon">👥</div>
+                                    <div class="stat-card-content">
+                                        <h3>Candidatos Vistos</h3>
+                                        <p class="stat-card-value" id="candidatesViewed">0</p>
+                                    </div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-card-icon">💚</div>
+                                    <div class="stat-card-content">
+                                        <h3>Matches Totales</h3>
+                                        <p class="stat-card-value" id="companyMatches">0</p>
+                                    </div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-card-icon">📈</div>
+                                    <div class="stat-card-content">
+                                        <h3>Tasa de Match</h3>
+                                        <p class="stat-card-value">12%</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="dashboard-content-grid">
+                                <div class="dashboard-card">
+                                    <h3>Ofertas de Trabajo</h3>
+                                    <div class="jobs-list" id="jobsList">
+                                        <div class="job-item">
+                                            <h4>Senior React Developer</h4>
+                                            <p>Remote - $100k-$150k</p>
+                                            <span class="job-status active">Activa</span>
+                                        </div>
+                                    </div>
+                                    <button class="add-job-btn" onclick="showSection('jobs')">+ Crear Nueva Oferta</button>
+                                </div>
+                                <div class="dashboard-card">
+                                    <h3>Actividad Reciente</h3>
+                                    <div class="activity-timeline">
+                                        <div class="timeline-item">
+                                            <span class="timeline-time">Hace 1 hora</span>
+                                            <p>Nuevo match con candidato</p>
+                                        </div>
+                                        <div class="timeline-item">
+                                            <span class="timeline-time">Hace 3 horas</span>
+                                            <p>Oferta de trabajo publicada</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sección de Ofertas (Solo para Empresa) -->
+                <div class="section" id="jobsSection" style="display: none;">
+                    <div class="jobs-container">
+                        <div class="section-header">
+                            <h2 class="section-title">Mis Ofertas de Trabajo</h2>
+                            <button class="primary-button" onclick="showCreateJobModal()">+ Crear Nueva Oferta</button>
+                        </div>
+                        <div class="jobs-grid" id="jobsGrid">
+                            <!-- Se llenará dinámicamente -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sección de Matches -->
+                <div class="section" id="matchesSection" style="display: none;">
+                    <div class="matches-container">
+                        <h2 class="section-title">Tus Matches</h2>
+                        <div class="matches-grid" id="matchesGrid">
+                            <!-- Se llenará dinámicamente -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sección de Mensajes -->
+                <div class="section" id="messagesSection" style="display: none;">
+                    <div class="messages-container">
+                        <h2 class="section-title">Mensajes</h2>
+                        <div class="messages-layout">
+                            <div class="conversations-list">
+                                <h3>Conversaciones</h3>
+                                <div class="conversation-item">
+                                    <div class="conversation-avatar">👤</div>
+                                    <div class="conversation-info">
+                                        <h4>María García</h4>
+                                        <p>Hola, me interesa tu perfil...</p>
+                                    </div>
+                                    <span class="conversation-time">Hoy</span>
+                                </div>
+                            </div>
+                            <div class="chat-area">
+                                <p class="empty-message">Selecciona una conversación para comenzar</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sección de Perfil -->
+                <div class="section" id="profileSection" style="display: none;">
+                    <div class="profile-container">
+                        <h2 class="section-title">Mi Perfil</h2>
+                        <div class="profile-content">
+                            <div class="profile-header">
+                                <div class="profile-avatar" id="profileAvatar">
+                                    <img id="profileImage" src="" alt="Avatar">
+                                    <button class="edit-avatar-btn" onclick="editProfileImage()">✏️</button>
+                                </div>
+                                <div class="profile-info">
+                                    <h2 id="profileName"></h2>
+                                    <p id="profileRole"></p>
+                                    <span class="profile-badge" id="profileBadge"></span>
+                                </div>
+                            </div>
+                            <form class="profile-form" id="profileForm" onsubmit="saveProfile(event)">
+                                <div class="form-group">
+                                    <label for="editName">Nombre completo</label>
+                                    <input type="text" id="editName" placeholder="Tu nombre" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="editEmail">Correo electrónico</label>
+                                    <input type="email" id="editEmail" placeholder="tu@email.com" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="editDescription">Descripción</label>
+                                    <textarea id="editDescription" rows="4" placeholder="Cuéntanos sobre ti..."></textarea>
+                                </div>
+                                <div class="form-group">
+                                    <label for="editTechStack">Stack Tecnológico (separado por comas)</label>
+                                    <input type="text" id="editTechStack" placeholder="React, Node.js, TypeScript...">
+                                </div>
+                                <!-- Campos para Empresa -->
+                                <div id="companyFields" style="display: none;">
+                                    <div class="form-group">
+                                        <label for="editCompanyName">Nombre de la Empresa</label>
+                                        <input type="text" id="editCompanyName" placeholder="Nombre de tu empresa">
+                                    </div>
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label for="editCompanySize">Tamaño de la Empresa</label>
+                                            <select id="editCompanySize">
+                                                <option value="">Selecciona...</option>
+                                                <option value="1-10">1-10 empleados</option>
+                                                <option value="11-50">11-50 empleados</option>
+                                                <option value="51-200">51-200 empleados</option>
+                                                <option value="201-500">201-500 empleados</option>
+                                                <option value="500+">500+ empleados</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="editIndustry">Industria</label>
+                                            <select id="editIndustry">
+                                                <option value="">Selecciona...</option>
+                                                <option value="Tecnología">Tecnología</option>
+                                                <option value="Fintech">Fintech</option>
+                                                <option value="E-commerce">E-commerce</option>
+                                                <option value="Diseño">Diseño</option>
+                                                <option value="Inteligencia Artificial">Inteligencia Artificial</option>
+                                                <option value="Software as a Service">Software as a Service</option>
+                                                <option value="Otra">Otra</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="editCompanyLocation">Ubicación de la Empresa</label>
+                                        <input type="text" id="editCompanyLocation" placeholder="Ej: Madrid, España">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="editCompanyWebsite">Sitio Web (opcional)</label>
+                                        <input type="url" id="editCompanyWebsite" placeholder="https://tuempresa.com">
+                                    </div>
+                                </div>
+                                <!-- Campos para Empleado -->
+                                <div id="employeeFields" style="display: none;">
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label for="editExperience">Años de Experiencia</label>
+                                            <select id="editExperience">
+                                                <option value="">Selecciona...</option>
+                                                <option value="Sin experiencia">Sin experiencia</option>
+                                                <option value="1-2 años">1-2 años</option>
+                                                <option value="3-5 años">3-5 años</option>
+                                                <option value="5+ años">5+ años</option>
+                                                <option value="6+ años">6+ años</option>
+                                                <option value="7+ años">7+ años</option>
+                                                <option value="8+ años">8+ años</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="editAvailability">Disponibilidad</label>
+                                            <select id="editAvailability">
+                                                <option value="">Selecciona...</option>
+                                                <option value="Inmediata">Inmediata</option>
+                                                <option value="1 semana">1 semana</option>
+                                                <option value="2 semanas">2 semanas</option>
+                                                <option value="3 semanas">3 semanas</option>
+                                                <option value="1 mes">1 mes</option>
+                                                <option value="2 meses">2 meses</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="editPreferredLocation">Ubicación Preferida</label>
+                                        <select id="editPreferredLocation">
+                                            <option value="">Selecciona...</option>
+                                            <option value="Remoto">Remoto</option>
+                                            <option value="Híbrido">Híbrido</option>
+                                            <option value="Presencial">Presencial</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="editSalaryExpected">Salario Esperado (opcional)</label>
+                                        <input type="text" id="editSalaryExpected" placeholder="Ej: $80,000 - $120,000">
+                                    </div>
+                                </div>
+                                <button type="submit" class="save-button">Guardar Cambios</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </main>
+
+            <footer class="feed-footer">
+                <div class="feed-stats">
+                    <div class="stat-item">
+                        <span class="stat-label">Deslizados</span>
+                        <span class="stat-value" id="swipedCount">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Matches</span>
+                        <span class="stat-value stat-match" id="matchesCount">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Disponibles</span>
+                        <span class="stat-value" id="availableCount">0</span>
+                    </div>
+                </div>
+            </footer>
+        </div>
+
+        <!-- Sidebar Derecho -->
+        <aside class="sidebar sidebar-right" id="rightSidebar">
+            <div class="sidebar-content">
+                <h3 class="sidebar-title">Actividad</h3>
+                <div class="activity-list" id="activityList">
+                    <div class="activity-item">
+                        <span class="activity-icon">🎯</span>
+                        <div class="activity-text">
+                            <strong>Bienvenido a PlusZone</strong>
+                            <p>Comienza a deslizar para encontrar tu próximo match</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Match Overlay -->
+        <div class="match-overlay" id="matchOverlay" style="display: none;">
+            <div class="match-content">
+                <div class="confetti">🎉</div>
+                <h1 class="match-title">¡Es un Match!</h1>
+                <p class="match-subtitle" id="matchSubtitle"></p>
+                <div class="match-profile" id="matchProfile">
+                    <!-- Se llenará dinámicamente -->
+                </div>
+                <button class="match-button" id="closeMatchButton">Continuar</button>
+            </div>
+        </div>
+
+        <!-- Modal para Crear Oferta de Trabajo -->
+        <div class="modal-overlay" id="createJobModal" style="display: none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Crear Nueva Oferta de Trabajo</h2>
+                    <button class="modal-close" onclick="closeCreateJobModal()">×</button>
+                </div>
+                <form class="modal-form" id="createJobForm" onsubmit="handleCreateJob(event)">
+                    <div class="form-group">
+                        <label for="jobTitle">Título del Puesto</label>
+                        <input type="text" id="jobTitle" placeholder="Ej: Senior React Developer" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="jobDescription">Descripción</label>
+                        <textarea id="jobDescription" rows="4" placeholder="Describe el puesto de trabajo..." required></textarea>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="jobSalary">Salario</label>
+                            <input type="text" id="jobSalary" placeholder="Ej: $100,000 - $150,000" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="jobLocation">Ubicación</label>
+                            <select id="jobLocation" required>
+                                <option value="remote">Remoto</option>
+                                <option value="hybrid">Híbrido</option>
+                                <option value="onsite">Presencial</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="jobTechStack">Stack Tecnológico (separado por comas)</label>
+                        <input type="text" id="jobTechStack" placeholder="React, Node.js, TypeScript...">
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="secondary-button" onclick="closeCreateJobModal()">Cancelar</button>
+                        <button type="submit" class="primary-button">Crear Oferta</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de verificación (se abre al registrar o si el login indica que falta verificar) -->
+    <div class="modal-overlay" id="verifyModal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Verificar Correo</h2>
+                <button class="modal-close" onclick="closeVerifyModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <p id="verifyMessage">Se ha enviado un código de verificación a tu correo. Ingresa el código a continuación.</p>
+                <div class="form-group">
+                    <label for="verifyCodeInput">Código de verificación</label>
+                    <input type="text" id="verifyCodeInput" placeholder="123456" maxlength="6">
+                </div>
+                <div id="verifyFeedback" style="margin-top:0.5rem;color:#333"></div>
+                <div class="modal-actions" style="margin-top:1rem; display:flex; gap:0.5rem;">
+                    <button class="secondary-button" onclick="closeVerifyModal()">Cancelar</button>
+                    <button class="secondary-button" id="resendCodeBtn" onclick="handleResendCode()">Reenviar código</button>
+                    <button class="primary-button" id="confirmVerifyBtn" onclick="handleConfirmVerify()">Verificar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="database.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
