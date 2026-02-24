@@ -224,8 +224,9 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => console.log('Socket disconnected:', socket.id));
 });
 
+// Código de verificación de 7 dígitos (1000000 - 9999999)
 function generateCode() {
-  return Math.floor(100000 + Math.random() * 900000).toString();
+  return Math.floor(1000000 + Math.random() * 9000000).toString();
 }
 
 // Health
@@ -236,117 +237,98 @@ app.post('/api/auth/register', async (req, res) => {
   const { name, email, password, user_type } = req.body;
   if (!name || !email || !password) return res.status(400).json({ error: 'Datos incompletos' });
 
-  // Domain requirement: only tecmilenio.mx
   if (!email.toLowerCase().endsWith('@tecmilenio.mx')) {
     return res.status(400).json({ error: 'El correo debe pertenecer al dominio @tecmilenio.mx' });
   }
 
-  const conn = await pool.getConnection();
   try {
-      // Check existing
-    const [existingRows] = await conn.query('SELECT id, is_active FROM users WHERE email = ?', [email]);
+    const { rows: existingRows } = await pool.query('SELECT id, is_active FROM users WHERE email = $1', [email]);
     if (existingRows.length > 0) {
       const existing = existingRows[0];
       if (existing.is_active) {
         return res.status(400).json({ error: 'Correo ya registrado' });
       }
 
-      // Usuario existe pero no está verificado -> reenviar código y responder ok
       const userId = existing.id;
       const code = generateCode();
       const expirationMinutes = parseInt(process.env.VERIFICATION_EXPIRATION_MINUTES || '15', 10);
       const expiresAt = new Date(Date.now() + expirationMinutes * 60 * 1000);
 
-      await conn.query(
-        'INSERT INTO email_verifications (user_id, code, expires_at, verified) VALUES (?, ?, ?, ?)',
+      await pool.query(
+        'INSERT INTO email_verifications (user_id, code, expires_at, verified) VALUES ($1, $2, $3, $4)',
         [userId, code, expiresAt, false]
       );
 
       const mailOptionsResend = {
         subject: 'PlusZone - Código de verificación (reenvío)',
-        text: `Tu código de verificación es: ${code}. El código expira en ${expirationMinutes} minutos.`
+        text: `Tu código de verificación de 7 dígitos es: ${code}. El código expira en ${expirationMinutes} minutos.`
       };
 
       const sendResult = await sendVerificationEmail({ to: email, code, subject: mailOptionsResend.subject, text: mailOptionsResend.text });
       if (sendResult.sent) {
         return res.json({ ok: true, message: 'Cuenta existente pendiente de verificación. Se ha reenviado un código.' });
       }
-
       if (sendResult.fallback) {
         return res.json({ ok: true, warning: 'Cuenta pendiente de verificación. No se pudo enviar el correo; el código ha sido registrado en el servidor para desarrollo.' });
       }
-
       console.error('Error enviando email de reenvío para usuario existente:', sendResult.error || 'unknown');
       return res.status(500).json({ error: 'No se pudo enviar el correo de verificación. Contacta al administrador.' });
     }
 
     const password_hash = await bcrypt.hash(password, 10);
-
-    const [result] = await conn.query(
-      'INSERT INTO users (email, password_hash, name, user_type, image_url, description, is_active) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    const result = await pool.query(
+      'INSERT INTO users (email, password_hash, name, user_type, image_url, description, is_active) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
       [email, password_hash, name, user_type || 'employee', null, null, false]
     );
+    const userId = result.rows[0].id;
 
-    const userId = result.insertId;
-
-    // Create an associated profile (not visible until verification - depends on users.is_active)
-    await conn.query(
-      'INSERT INTO profiles (user_id, name, description, detailed_description, tech_stack, salary, image_url, role) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    await pool.query(
+      'INSERT INTO profiles (user_id, name, description, detailed_description, tech_stack, salary, image_url, role) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
       [userId, name, '', '', JSON.stringify([]), '', null, user_type === 'company' ? 'job' : 'candidate']
     );
 
-    // Create verification code
     const code = generateCode();
     const expirationMinutes = parseInt(process.env.VERIFICATION_EXPIRATION_MINUTES || '15', 10);
     const expiresAt = new Date(Date.now() + expirationMinutes * 60 * 1000);
-
-    await conn.query(
-      'INSERT INTO email_verifications (user_id, code, expires_at, verified) VALUES (?, ?, ?, ?)',
+    await pool.query(
+      'INSERT INTO email_verifications (user_id, code, expires_at, verified) VALUES ($1, $2, $3, $4)',
       [userId, code, expiresAt, false]
     );
 
-    // Send email (no fracaso crítico: el usuario queda creado y puede solicitar reenvío)
     const mailOptions = {
       subject: 'PlusZone - Código de verificación',
-      text: `Tu código de verificación es: ${code}. El código expira en ${expirationMinutes} minutos.`
+      text: `Tu código de verificación de 7 dígitos es: ${code}. El código expira en ${expirationMinutes} minutos.`
     };
 
     const sendResult = await sendVerificationEmail({ to: email, code, subject: mailOptions.subject, text: mailOptions.text });
     if (sendResult.sent) {
       return res.json({ ok: true, message: 'Usuario registrado. Revisa tu correo para verificar la cuenta.' });
     }
-
     if (sendResult.fallback) {
       return res.json({ ok: true, warning: 'Cuenta creada, pero no se pudo enviar el correo de verificación. En desarrollo, el código se guardó en el servidor para depuración.' });
     }
-
     console.error('Usuario creado pero no se pudo enviar email de verificación:', sendResult.error || 'unknown');
     res.json({ ok: true, warning: 'Cuenta creada, pero no se pudo enviar el correo de verificación. Usa /api/auth/resend cuando la configuración de email esté disponible.' });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Error interno' });
-  } finally {
-    conn.release();
   }
 });
 
-// Verify code
+// Verify code (código de 7 dígitos)
 app.post('/api/auth/verify', async (req, res) => {
   const { email, code } = req.body;
   if (!email || !code) return res.status(400).json({ error: 'Datos incompletos' });
 
-  const conn = await pool.getConnection();
   try {
-    const [users] = await conn.query('SELECT id, is_active FROM users WHERE email = ?', [email]);
+    const { rows: users } = await pool.query('SELECT id, is_active FROM users WHERE email = $1', [email]);
     if (users.length === 0) return res.status(404).json({ error: 'Usuario no encontrado' });
 
     const userId = users[0].id;
-
-    const [rows] = await conn.query('SELECT id, code, expires_at, verified FROM email_verifications WHERE user_id = ? ORDER BY id DESC LIMIT 1', [userId]);
+    const { rows } = await pool.query('SELECT id, code, expires_at, verified FROM email_verifications WHERE user_id = $1 ORDER BY id DESC LIMIT 1', [userId]);
     if (rows.length === 0) return res.status(404).json({ error: 'Código no encontrado. Solicita uno nuevo.' });
 
     const record = rows[0];
-
     if (record.verified) return res.status(400).json({ error: 'Código ya verificado' });
 
     const now = new Date();
@@ -354,13 +336,11 @@ app.post('/api/auth/verify', async (req, res) => {
 
     if (record.code !== code) return res.status(400).json({ error: 'Código incorrecto' });
 
-    // Mark verification and activate user
-    await conn.query('UPDATE email_verifications SET verified = ? WHERE id = ?', [true, record.id]);
-    await conn.query('UPDATE users SET is_active = ? WHERE id = ?', [true, userId]);
+    await pool.query('UPDATE email_verifications SET verified = true WHERE id = $1', [record.id]);
+    await pool.query('UPDATE users SET is_active = true WHERE id = $1', [userId]);
 
-    // Obtener perfil del usuario verificado y notificar a los clientes conectados
     try {
-      const [profiles] = await conn.query('SELECT p.* FROM profiles p WHERE p.user_id = ? LIMIT 1', [userId]);
+      const { rows: profiles } = await pool.query('SELECT p.* FROM profiles p WHERE p.user_id = $1 LIMIT 1', [userId]);
       const profile = profiles && profiles.length > 0 ? profiles[0] : null;
       io.emit('user_verified', { user: { id: userId, email }, profile });
     } catch (emitErr) {
@@ -371,8 +351,6 @@ app.post('/api/auth/verify', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Error interno' });
-  } finally {
-    conn.release();
   }
 });
 
@@ -381,91 +359,78 @@ app.post('/api/auth/resend', async (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ error: 'Email requerido' });
 
-  const conn = await pool.getConnection();
   try {
-    const [users] = await conn.query('SELECT id FROM users WHERE email = ?', [email]);
+    const { rows: users } = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
     if (users.length === 0) return res.status(404).json({ error: 'Usuario no encontrado' });
 
     const userId = users[0].id;
-
-    // Rate limit: máximo 3 reenvíos en la última hora
-    const [[{ cnt }]] = await conn.query("SELECT COUNT(*) as cnt FROM email_verifications WHERE user_id = ? AND created_at > DATE_SUB(NOW(), INTERVAL 1 HOUR)", [userId]);
+    const { rows: countRows } = await pool.query(
+      "SELECT COUNT(*) as cnt FROM email_verifications WHERE user_id = $1 AND created_at > NOW() - INTERVAL '1 hour'",
+      [userId]
+    );
+    const cnt = parseInt(countRows[0].cnt, 10);
     if (cnt >= 3) return res.status(429).json({ error: 'Has solicitado demasiados códigos. Intenta más tarde.' });
 
     const code = generateCode();
     const expirationMinutes = parseInt(process.env.VERIFICATION_EXPIRATION_MINUTES || '15', 10);
     const expiresAt = new Date(Date.now() + expirationMinutes * 60 * 1000);
+    await pool.query('INSERT INTO email_verifications (user_id, code, expires_at, verified) VALUES ($1, $2, $3, $4)', [userId, code, expiresAt, false]);
 
-    await conn.query('INSERT INTO email_verifications (user_id, code, expires_at, verified) VALUES (?, ?, ?, ?)', [userId, code, expiresAt, false]);
-
-    // Send email
     const mailOptions = {
       subject: 'PlusZone - Código de verificación (reenvío)',
-      text: `Tu código de verificación es: ${code}. El código expira en ${expirationMinutes} minutos.`
+      text: `Tu código de verificación de 7 dígitos es: ${code}. El código expira en ${expirationMinutes} minutos.`
     };
 
     const sendResult = await sendVerificationEmail({ to: email, code, subject: mailOptions.subject, text: mailOptions.text });
     if (sendResult.sent) {
       return res.json({ ok: true, message: 'Código reenviado. Revisa tu correo.' });
     }
-
     if (sendResult.fallback) {
       return res.json({ ok: true, warning: 'Código registrado en el servidor para desarrollo. Revisa el archivo de depuración.' });
     }
-
     console.error('Error reenviando código:', sendResult.error || 'unknown');
     res.status(500).json({ error: 'Error interno' });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Error interno' });
-  } finally {
-    conn.release();
   }
 });
 
-// Login
+// Login (solo usuarios con correo verificado)
 app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Datos incompletos' });
 
-  const conn = await pool.getConnection();
   try {
-    const [rows] = await conn.query('SELECT id, email, password_hash, name, user_type, image_url, description, is_active FROM users WHERE email = ?', [email]);
+    const { rows } = await pool.query('SELECT id, email, password_hash, name, user_type, image_url, description, is_active FROM users WHERE email = $1', [email]);
     if (rows.length === 0) return res.status(404).json({ error: 'Usuario no encontrado' });
 
     const user = rows[0];
     const match = await bcrypt.compare(password, user.password_hash);
     if (!match) return res.status(401).json({ error: 'Credenciales inválidas' });
-    if (!user.is_active) return res.status(403).json({ error: 'Correo no verificado' });
+    if (!user.is_active) return res.status(403).json({ error: 'Correo no verificado. Revisa tu bandeja y verifica tu cuenta con el código de 7 dígitos.' });
 
-    // No token for now - simple sessionless response
     res.json({ ok: true, user: { id: user.id, email: user.email, name: user.name, type: user.user_type, imageUrl: user.image_url, description: user.description } });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Error interno' });
-  } finally {
-    conn.release();
   }
 });
 
 // Profiles: return profiles whose users are active
 app.get('/api/profiles', async (req, res) => {
-  const conn = await pool.getConnection();
   try {
-    const [rows] = await conn.query(`
+    const { rows } = await pool.query(`
       SELECT p.*, u.email, u.user_type, u.is_active
       FROM profiles p
       JOIN users u ON p.user_id = u.id
       WHERE u.is_active = true
       ORDER BY p.created_at DESC
     `);
-
     res.json({ ok: true, profiles: rows });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Error interno' });
-  } finally {
-    conn.release();
   }
 });
 
