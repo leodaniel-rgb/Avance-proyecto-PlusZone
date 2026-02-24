@@ -1,4 +1,4 @@
-const mysql = require('mysql2/promise');
+const { Pool } = require('pg');
 require('dotenv').config();
 
 const getEnv = (k, fallback) => {
@@ -7,15 +7,20 @@ const getEnv = (k, fallback) => {
   return fallback;
 };
 
-const pool = mysql.createPool({
-  host: getEnv('DB_HOST', 'localhost'),
-  port: parseInt(getEnv('DB_PORT', '3306'), 10),
-  user: getEnv('DB_USER', 'root'),
-  password: getEnv('DB_PASSWORD', ''),
-  database: getEnv('DB_NAME', 'pluszone'),
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0
+// Supabase/PostgreSQL: usar DATABASE_URL (conexión directa)
+// Formato: postgresql://postgres:[YOUR-PASSWORD]@db.xxxx.supabase.co:5432/postgres
+const connectionString = getEnv('DATABASE_URL', '');
+
+if (!connectionString) {
+  console.warn('DATABASE_URL no está definida. Configura la conexión directa de Supabase en server/.env');
+}
+
+const pool = new Pool({
+  connectionString,
+  ssl: connectionString && connectionString.includes('supabase.co') ? { rejectUnauthorized: false } : false,
+  max: 10,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000
 });
 
 module.exports = {
