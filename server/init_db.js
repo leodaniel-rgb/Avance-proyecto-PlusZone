@@ -93,14 +93,24 @@ async function run() {
       }
     }
 
-    // Match de ejemplo (admin con perfil María García si existe)
+    // Perfil "María García" para admin (seed de ejemplo) y match
     const { rows: adminUser } = await client.query("SELECT id FROM users WHERE email = 'admin@pluszone.com'");
-    const { rows: mariaProfile } = await client.query("SELECT id FROM profiles WHERE name = 'María García' LIMIT 1");
-    if (adminUser.length && mariaProfile.length) {
-      const { rows: existsMatch } = await client.query('SELECT id FROM matches WHERE user_id = $1 AND profile_id = $2', [adminUser[0].id, mariaProfile[0].id]);
-      if (existsMatch.length === 0) {
-        await client.query('INSERT INTO matches (user_id, profile_id) VALUES ($1, $2)', [adminUser[0].id, mariaProfile[0].id]);
-        console.log('Match de ejemplo creado.');
+    if (adminUser.length) {
+      const { rows: mariaExists } = await client.query("SELECT id FROM profiles WHERE user_id = $1 AND name = 'María García'", [adminUser[0].id]);
+      if (mariaExists.length === 0) {
+        await client.query(
+          `INSERT INTO profiles (user_id, name, description, detailed_description, tech_stack, salary, image_url, role, category) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+          [adminUser[0].id, 'María García', 'Senior Full Stack Developer', 'Desarrolladora con más de 8 años de experiencia.', JSON.stringify(['React', 'Node.js', 'TypeScript', 'PostgreSQL', 'AWS', 'Docker']), '$80,000 - $120,000', 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&h=400&fit=crop', 'candidate', 'Informática']
+        );
+        console.log('Perfil María García creado.');
+      }
+      const { rows: mariaProfile } = await client.query("SELECT id FROM profiles WHERE name = 'María García' LIMIT 1");
+      if (mariaProfile.length) {
+        const { rows: existsMatch } = await client.query('SELECT id FROM matches WHERE user_id = $1 AND profile_id = $2', [adminUser[0].id, mariaProfile[0].id]);
+        if (existsMatch.length === 0) {
+          await client.query('INSERT INTO matches (user_id, profile_id) VALUES ($1, $2)', [adminUser[0].id, mariaProfile[0].id]);
+          console.log('Match de ejemplo creado.');
+        }
       }
     }
 

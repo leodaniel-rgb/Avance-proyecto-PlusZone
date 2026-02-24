@@ -145,9 +145,13 @@ async function enqueueOutbox({ to, subject, text, payload }) {
   try {
     const baseSecs = parseInt(process.env.OUTBOX_RETRY_BASE_SECONDS || '60', 10);
     const nextAttempt = new Date(Date.now() + baseSecs * 1000);
-    const [res] = await pool.query('INSERT INTO email_outbox (to_email, subject, text, payload, status, attempts, next_attempt_at) VALUES (?, ?, ?, ?, ?, ?, ?)', [to, subject, text, JSON.stringify(payload || {}), 'pending', 0, nextAttempt]);
-    console.log('Email encolado en outbox id', res.insertId, 'para', to);
-    return { ok: true, id: res.insertId };
+    const res = await pool.query(
+      'INSERT INTO email_outbox (to_email, subject, text, payload, status, attempts, next_attempt_at) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
+      [to, subject, text, JSON.stringify(payload || {}), 'pending', 0, nextAttempt]
+    );
+    const id = res.rows && res.rows[0] ? res.rows[0].id : null;
+    console.log('Email encolado en outbox id', id, 'para', to);
+    return { ok: true, id };
   } catch (err) {
     console.error('Error al encolar email en outbox:', err);
     return { ok: false, error: err.message };
