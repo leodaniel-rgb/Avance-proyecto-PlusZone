@@ -2185,6 +2185,7 @@ function viewMatchProfile(profileId) {
     if (isVisible) {
         // Ocultar panel
         detailsPanel.style.display = 'none';
+        detailsPanel.classList.remove('match-details-visible');
         if (matchCard) matchCard.classList.remove('details-expanded');
         if (viewIcon) {
             viewIcon.textContent = '▼';
@@ -2195,6 +2196,7 @@ function viewMatchProfile(profileId) {
         document.querySelectorAll('.match-profile-details').forEach(panel => {
             if (panel.id !== `match-details-${profileId}`) {
                 panel.style.display = 'none';
+                panel.classList.remove('match-details-visible');
                 const otherId = panel.id.replace('match-details-', '');
                 const otherCard = document.querySelector(`[data-profile-id="${otherId}"]`);
                 const otherIcon = document.getElementById(`view-icon-${otherId}`);
@@ -2206,8 +2208,9 @@ function viewMatchProfile(profileId) {
             }
         });
         
-        // Mostrar panel
+        // Mostrar panel (clase + display para layout desktop horizontal / móvil vertical)
         detailsPanel.style.display = 'block';
+        detailsPanel.classList.add('match-details-visible');
         if (matchCard) matchCard.classList.add('details-expanded');
         if (viewIcon) {
             viewIcon.textContent = '▲';

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PlusZone - Tinder meets LinkedIn</title>
-    <link rel="stylesheet" href="styles.css?v=5">
+    <link rel="stylesheet" href="styles.css?v=6">
 </head>
 <body>
     <!-- Pantalla de Carga -->
@@ -197,30 +197,46 @@
             <main class="feed-main">
                 <!-- Sección de Descubrir -->
                 <div class="section active" id="discoverSection">
-                    <!-- Filtro de Categorías -->
-                    <div class="category-filter" id="categoryFilter">
-                        <label for="categorySelect" class="filter-title">Filtrar por categoría:</label>
-                        <select id="categorySelect" class="category-select" onchange="filterByCategory(this.value)">
-                            <!-- Se generarán dinámicamente -->
-                        </select>
+                    <!-- Desktop: filtro + contadores en una sola fila; móvil: filtro arriba, contadores abajo -->
+                    <div class="discover-header">
+                        <div class="category-filter" id="categoryFilter">
+                            <label for="categorySelect" class="filter-title">Filtrar por categoría:</label>
+                            <select id="categorySelect" class="category-select" onchange="filterByCategory(this.value)">
+                                <!-- Se generarán dinámicamente -->
+                            </select>
+                        </div>
+                        <div class="feed-stats discover-stats" id="discoverStats">
+                            <div class="stat-item">
+                                <span class="stat-label">Deslizados</span>
+                                <span class="stat-value" id="swipedCount">0</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Matches</span>
+                                <span class="stat-value stat-match" id="matchesCount">0</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Disponibles</span>
+                                <span class="stat-value" id="availableCount">0</span>
+                            </div>
+                        </div>
                     </div>
-                    
+
                     <div class="swipe-container" id="swipeContainer">
-                        <div class="cards-stack" id="cardsStack">
-                            <!-- Las tarjetas se generarán dinámicamente -->
+                        <!-- Desktop: corazón (izq) | card | equis (der). Móvil: card arriba, botones abajo. -->
+                        <div class="swipe-card-actions">
+                            <button class="action-button action-interested" id="interestedButton" aria-label="Interesado">
+                                ♥
+                            </button>
+                            <div class="cards-stack" id="cardsStack">
+                                <!-- Las tarjetas se generarán dinámicamente -->
+                            </div>
+                            <button class="action-button action-pass" id="passButton" aria-label="Pasar">
+                                ✕
+                            </button>
                         </div>
                         <!-- Contenedor para paneles de detalles -->
                         <div class="card-details-container" id="cardDetailsContainer">
                             <!-- Los paneles se generarán dinámicamente -->
-                        </div>
-
-                        <div class="swipe-actions">
-                            <button class="action-button action-pass" id="passButton" aria-label="Pasar">
-                                ✕
-                            </button>
-                            <button class="action-button action-interested" id="interestedButton" aria-label="Interesado">
-                                ♥
-                            </button>
                         </div>
 
                         <div class="swipe-container-empty" id="emptyState" style="display: none;">
@@ -517,23 +533,6 @@
                     </div>
                 </div>
             </main>
-
-            <footer class="feed-footer">
-                <div class="feed-stats">
-                    <div class="stat-item">
-                        <span class="stat-label">Deslizados</span>
-                        <span class="stat-value" id="swipedCount">0</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-label">Matches</span>
-                        <span class="stat-value stat-match" id="matchesCount">0</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-label">Disponibles</span>
-                        <span class="stat-value" id="availableCount">0</span>
-                    </div>
-                </div>
-            </footer>
         </div>
 
         <!-- Sidebar Derecho -->
