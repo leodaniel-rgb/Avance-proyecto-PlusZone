@@ -1977,17 +1977,15 @@ function renderCategoryFilter() {
 
 function filterByCategory(category) {
     state.selectedCategory = category;
-    state.currentIndex = 0;
-    state.swipedProfiles = [];
+    filterProfilesByUserType(); // actualizar state.profiles por categoría y resetear índice
     renderCategoryFilter();
     renderCards();
 }
 
 function renderCards() {
-    // Filtrar perfiles según el tipo de usuario y categoría
-    filterProfilesByUserType();
-    
-    // Renderizar filtro de categorías
+    // No llamar filterProfilesByUserType() aquí: reseteaba currentIndex en cada render
+    // y hacía que siempre se viera la misma card. El filtrado se hace en showMainApp,
+    // filterByCategory y fetchProfiles.
     renderCategoryFilter();
     
     const cardsStack = document.getElementById('cardsStack');
