@@ -2093,7 +2093,13 @@ function renderMatches() {
         return;
     }
     
-    matchesGrid.innerHTML = matches.map(profile => `
+    matchesGrid.innerHTML = matches.map(profile => {
+        const isJob = profile.role === 'job';
+        const attrs = isJob
+            ? [profile.companyName && `🏢 ${profile.companyName}`, profile.location && `📍 ${profile.location}`, profile.industry].filter(Boolean).slice(0, 3)
+            : [profile.location && `📍 ${profile.location}`, profile.experience].filter(Boolean).slice(0, 2);
+        const attrsLine = attrs.length ? attrs.join(' · ') : '';
+        return `
         <div class="match-card" data-profile-id="${profile.id}">
             <div class="match-card-main">
                 <div class="match-card-image-container">
@@ -2102,9 +2108,10 @@ function renderMatches() {
                 </div>
                 <div class="match-card-content">
                     <h3>${profile.name}</h3>
-                    <p>${profile.description}</p>
-                    <div class="card-tags">
-                        ${profile.techStack.slice(0, 3).map(tech => `<span class="tag">${tech}</span>`).join('')}
+                    <p class="match-card-description">${profile.description}</p>
+                    ${attrsLine ? `<p class="match-card-attrs">${attrsLine}</p>` : ''}
+                    <div class="match-card-tags">
+                        ${(profile.techStack || []).slice(0, 5).map(tech => `<span class="tag">${tech}</span>`).join('')}
                     </div>
                     <div class="match-card-actions">
                         <button class="message-button" onclick="openChat('${profile.id}')" title="Enviar mensaje">
@@ -2118,12 +2125,12 @@ function renderMatches() {
                     </div>
                 </div>
             </div>
-            <!-- Panel de información lateral (escritorio) / debajo (móvil) -->
             <div class="match-profile-details" id="match-details-${profile.id}" style="display: none;">
                 ${createMatchDetailsHTML(profile)}
             </div>
         </div>
-    `).join('');
+    `;
+    }).join('');
 }
 
 function createMatchDetailsHTML(profile) {
