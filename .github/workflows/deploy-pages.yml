@@ -1,5 +1,4 @@
-# Despliega el frontend en GitHub Pages (página web accesible).
-# Repositorio: leodaniel-rgb/Avance-proyecto-PlusZone
+
 # URL: https://leodaniel-rgb.github.io/Avance-proyecto-PlusZone/
 # Variables en Settings → Actions → Variables: API_BASE_URL, SUPABASE_URL, SUPABASE_ANON_KEY
 
