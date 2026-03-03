@@ -418,7 +418,8 @@
                             <div class="profile-header">
                                 <div class="profile-avatar" id="profileAvatar">
                                     <img id="profileImage" src="" alt="Avatar">
-                                    <button class="edit-avatar-btn" onclick="editProfileImage()">✏️</button>
+                                    <input type="file" id="profileImageInput" accept="image/*" style="display: none;" onchange="handleProfileImageFile(event)">
+                                    <button type="button" class="edit-avatar-btn" onclick="document.getElementById('profileImageInput').click()" title="Cambiar foto">✏️</button>
                                 </div>
                                 <div class="profile-info">
                                     <h2 id="profileName"></h2>
@@ -526,6 +527,12 @@
                                         <label for="editSalaryExpected">Salario Esperado (opcional)</label>
                                         <input type="text" id="editSalaryExpected" placeholder="Ej: $80,000 - $120,000">
                                     </div>
+                                </div>
+                                <div class="form-group">
+                                    <label>Documentos adjuntos (CV, certificaciones)</label>
+                                    <input type="file" id="editAttachments" multiple accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" onchange="handleAttachmentFiles(event)">
+                                    <p class="form-hint">Puedes subir tu CV o certificados (PDF, Word o imágenes). Máx. ~2 MB por archivo.</p>
+                                    <ul class="attachments-list" id="attachmentsList"></ul>
                                 </div>
                                 <button type="submit" class="save-button">Guardar Cambios</button>
                             </form>

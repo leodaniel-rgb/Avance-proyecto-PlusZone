@@ -635,6 +635,47 @@ const state = {
     selectedCategory: 'Todas' // Categoría seleccionada para filtrar
 };
 
+// Cargar perfiles desde la base de datos para que Discover y Matches muestren datos reales
+function loadAllProfilesFromDatabase() {
+    if (typeof Database === 'undefined') return;
+    const db = Database.getAll();
+    if (!db || !db.profiles || !db.profiles.length) return;
+    const users = db.users || [];
+    const userById = {};
+    users.forEach(u => { userById[u.id] = u; });
+    state.allProfiles = db.profiles.map(p => {
+        const user = p.user_id ? userById[p.user_id] : null;
+        const base = {
+            id: p.id,
+            user_id: p.user_id,
+            name: p.name,
+            description: p.description || '',
+            detailedDescription: p.detailed_description || p.description || '',
+            techStack: Array.isArray(p.tech_stack) ? p.tech_stack : [],
+            imageUrl: p.image_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400&h=400&fit=crop',
+            role: p.role,
+            salary: p.salary,
+            category: p.category,
+            location: p.location,
+            companyName: p.company_name,
+            industry: p.industry,
+            companySize: p.company_size
+        };
+        if (p.role === 'candidate' && user) {
+            base.experience = user.experience;
+            base.availability = user.availability;
+            base.preferredLocation = user.preferred_location;
+            base.salaryExpected = user.salary_expected || p.salary;
+            base.location = base.location || user.preferred_location;
+        }
+        if (p.role === 'job') {
+            base.companyName = base.companyName || p.company_name;
+            base.location = base.location || p.location;
+        }
+        return base;
+    });
+}
+
 // Función para filtrar perfiles según el tipo de usuario y categoría
 function filterProfilesByUserType() {
     if (!state.currentUser) {
@@ -866,7 +907,8 @@ async function handleLogin(e) {
                     type: adminUser.user_type,
                     imageUrl: adminUser.image_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400&h=400&fit=crop',
                     description: adminUser.description || '',
-                    techStack: adminUser.tech_stack || []
+                    techStack: adminUser.tech_stack || [],
+                    attachments: adminUser.attachments || []
                 };
 
                 const authScreen = document.getElementById('authScreen');
@@ -908,8 +950,21 @@ async function handleLogin(e) {
             type: user.user_type,
             imageUrl: user.image_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400&h=400&fit=crop',
             description: user.description || '',
-            techStack: user.tech_stack || []
+            techStack: user.tech_stack || [],
+            companyName: user.company_name,
+            companySize: user.company_size,
+            industry: user.industry,
+            companyLocation: user.company_location,
+            companyWebsite: user.company_website,
+            experience: user.experience,
+            availability: user.availability,
+            preferredLocation: user.preferred_location,
+            salaryExpected: user.salary_expected,
+            attachments: user.attachments || []
         };
+
+        // Usar perfiles reales de la base de datos en Discover y Matches
+        if (typeof Database !== 'undefined') loadAllProfilesFromDatabase();
 
         const authScreen = document.getElementById('authScreen');
         const app = document.getElementById('app');
@@ -1579,15 +1634,17 @@ function loadProfile() {
     if (editAvailability) editAvailability.value = state.currentUser.availability || '';
     if (editPreferredLocation) editPreferredLocation.value = state.currentUser.preferredLocation || '';
     if (editSalaryExpected) editSalaryExpected.value = state.currentUser.salaryExpected || '';
+    
+    renderAttachmentsList();
 }
 
 function saveProfile(e) {
     e.preventDefault();
     if (!state.currentUser) return;
     
-    state.currentUser.name = document.getElementById('editName').value;
-    state.currentUser.email = document.getElementById('editEmail').value;
-    state.currentUser.description = document.getElementById('editDescription').value;
+    state.currentUser.name = document.getElementById('editName').value.trim();
+    state.currentUser.email = document.getElementById('editEmail').value.trim();
+    state.currentUser.description = document.getElementById('editDescription').value.trim();
     const techStackStr = document.getElementById('editTechStack').value;
     state.currentUser.techStack = techStackStr.split(',').map(t => t.trim()).filter(t => t);
     
@@ -1598,11 +1655,11 @@ function saveProfile(e) {
         const editCompanyLocation = document.getElementById('editCompanyLocation');
         const editCompanyWebsite = document.getElementById('editCompanyWebsite');
         
-        if (editCompanyName) state.currentUser.companyName = editCompanyName.value;
+        if (editCompanyName) state.currentUser.companyName = editCompanyName.value.trim();
         if (editCompanySize) state.currentUser.companySize = editCompanySize.value;
         if (editIndustry) state.currentUser.industry = editIndustry.value;
-        if (editCompanyLocation) state.currentUser.companyLocation = editCompanyLocation.value;
-        if (editCompanyWebsite) state.currentUser.companyWebsite = editCompanyWebsite.value;
+        if (editCompanyLocation) state.currentUser.companyLocation = editCompanyLocation.value.trim();
+        if (editCompanyWebsite) state.currentUser.companyWebsite = editCompanyWebsite.value.trim();
     } else {
         const editExperience = document.getElementById('editExperience');
         const editAvailability = document.getElementById('editAvailability');
@@ -1612,7 +1669,37 @@ function saveProfile(e) {
         if (editExperience) state.currentUser.experience = editExperience.value;
         if (editAvailability) state.currentUser.availability = editAvailability.value;
         if (editPreferredLocation) state.currentUser.preferredLocation = editPreferredLocation.value;
-        if (editSalaryExpected) state.currentUser.salaryExpected = editSalaryExpected.value;
+        if (editSalaryExpected) state.currentUser.salaryExpected = editSalaryExpected.value.trim();
+    }
+    
+    // Persistir en la base de datos (localStorage) si existe Database y el usuario viene de ahí
+    if (typeof Database !== 'undefined' && state.currentUser.id && typeof state.currentUser.id === 'number') {
+        const userUpdates = {
+            name: state.currentUser.name,
+            email: state.currentUser.email,
+            image_url: state.currentUser.imageUrl || '',
+            description: state.currentUser.description || '',
+            tech_stack: state.currentUser.techStack || [],
+            company_name: state.currentUser.companyName,
+            company_size: state.currentUser.companySize,
+            industry: state.currentUser.industry,
+            company_location: state.currentUser.companyLocation,
+            company_website: state.currentUser.companyWebsite,
+            experience: state.currentUser.experience,
+            availability: state.currentUser.availability,
+            preferred_location: state.currentUser.preferredLocation,
+            salary_expected: state.currentUser.salaryExpected,
+            attachments: state.currentUser.attachments || []
+        };
+        Database.updateUser(state.currentUser.id, userUpdates);
+        // Sincronizar también el perfil público (el que ven otros en Discover / matches)
+        Database.updateProfileByUserId(state.currentUser.id, {
+            name: state.currentUser.name,
+            description: state.currentUser.description || '',
+            detailed_description: state.currentUser.detailedDescription || state.currentUser.description || '',
+            tech_stack: state.currentUser.techStack || [],
+            image_url: state.currentUser.imageUrl || ''
+        });
     }
     
     loadProfile();
@@ -1622,13 +1709,67 @@ function saveProfile(e) {
     alert('Perfil actualizado exitosamente');
 }
 
-function editProfileImage() {
-    const newImageUrl = prompt('Ingresa la URL de tu nueva imagen:');
-    if (newImageUrl) {
-        state.currentUser.imageUrl = newImageUrl;
+function handleProfileImageFile(event) {
+    const file = event.target && event.target.files[0];
+    if (!file || !state.currentUser) return;
+    if (!file.type.startsWith('image/')) {
+        alert('Por favor elige una imagen (JPG, PNG, etc.).');
+        return;
+    }
+    const reader = new FileReader();
+    reader.onload = function () {
+        state.currentUser.imageUrl = reader.result;
         loadProfile();
         addActivity('Imagen de perfil actualizada', 'Tu nueva foto se ha guardado');
+        event.target.value = '';
+    };
+    reader.readAsDataURL(file);
+}
+
+function handleAttachmentFiles(event) {
+    const files = event.target && event.target.files;
+    if (!files || !files.length || !state.currentUser) return;
+    if (!state.currentUser.attachments) state.currentUser.attachments = [];
+    const maxSize = 2 * 1024 * 1024; // 2 MB
+    for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        if (file.size > maxSize) {
+            alert(`El archivo "${file.name}" supera 2 MB. No se subirá.`);
+            continue;
+        }
+        const reader = new FileReader();
+        reader.onload = (function (f) {
+            return function () {
+                state.currentUser.attachments.push({
+                    name: f.name,
+                    type: f.type,
+                    size: f.size,
+                    data: reader.result
+                });
+                renderAttachmentsList();
+            };
+        })(file);
+        reader.readAsDataURL(file);
     }
+    event.target.value = '';
+}
+
+function removeAttachment(index) {
+    if (!state.currentUser || !state.currentUser.attachments) return;
+    state.currentUser.attachments.splice(index, 1);
+    renderAttachmentsList();
+}
+
+function renderAttachmentsList() {
+    const list = document.getElementById('attachmentsList');
+    if (!list) return;
+    const attachments = state.currentUser && state.currentUser.attachments ? state.currentUser.attachments : [];
+    list.innerHTML = attachments.map((att, i) => `
+        <li class="attachment-item">
+            <span class="attachment-name">${att.name}</span>
+            <button type="button" class="attachment-remove" onclick="removeAttachment(${i})" title="Quitar">×</button>
+        </li>
+    `).join('');
 }
 
 function updateUserInfo() {
@@ -2136,11 +2277,30 @@ function renderMatches() {
 function createMatchDetailsHTML(profile) {
     const isCandidate = profile.role === 'candidate';
     const isJob = profile.role === 'job';
-    
+    let attachmentsHTML = '';
+    if (isCandidate && profile.user_id && typeof Database !== 'undefined') {
+        const user = Database.getUserById(profile.user_id);
+        const attachments = user && user.attachments && user.attachments.length ? user.attachments : [];
+        if (attachments.length) {
+            attachmentsHTML = `
+                <div class="match-details-attachments">
+                    <h4 class="tech-stack-title">Documentos adjuntos (CV, certificaciones)</h4>
+                    <ul class="match-attachments-list">
+                        ${attachments.map((att, i) => `
+                            <li class="match-attachment-item">
+                                <a href="${att.data}" download="${(att.name || 'documento').replace(/"/g, '')}" target="_blank" rel="noopener" class="match-attachment-link">📎 ${att.name || 'Documento'}</a>
+                            </li>
+                        `).join('')}
+                    </ul>
+                </div>
+            `;
+        }
+    }
+    const techStack = profile.techStack && Array.isArray(profile.techStack) ? profile.techStack : [];
     return `
         <div class="match-details-content">
             <h3 class="match-details-title">${isCandidate ? 'Información del Candidato' : 'Detalles de la Oferta'}</h3>
-            <p class="match-details-description">${profile.detailedDescription}</p>
+            <p class="match-details-description">${profile.detailedDescription || profile.description || ''}</p>
             ${isCandidate ? `
                 <div class="match-details-info">
                     ${profile.experience ? `<div class="detail-item"><strong>Experiencia:</strong> ${profile.experience}</div>` : ''}
@@ -2162,9 +2322,10 @@ function createMatchDetailsHTML(profile) {
             <div class="match-details-tech">
                 <h4 class="tech-stack-title">${isCandidate ? 'Stack Tecnológico:' : 'Tecnologías Requeridas:'}</h4>
                 <div class="tech-stack-list">
-                    ${profile.techStack.map(tech => `<span class="tag">${tech}</span>`).join('')}
+                    ${techStack.map(tech => `<span class="tag">${tech}</span>`).join('')}
                 </div>
             </div>
+            ${attachmentsHTML}
         </div>
     `;
 }
@@ -2444,6 +2605,9 @@ window.showSection = showSection;
 window.handleLogout = handleLogout;
 window.editProfileImage = editProfileImage;
 window.saveProfile = saveProfile;
+window.handleProfileImageFile = handleProfileImageFile;
+window.handleAttachmentFiles = handleAttachmentFiles;
+window.removeAttachment = removeAttachment;
 window.flipCardBack = flipCardBack;
 window.clearAuthErrors = clearAuthErrors;
 window.togglePasswordVisibility = togglePasswordVisibility;

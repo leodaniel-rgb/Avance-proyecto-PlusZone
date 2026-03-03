@@ -220,6 +220,17 @@ const Database = {
         return userWithoutPassword;
     },
 
+    // Actualizar perfil público (el que ven otros en Discover) por user_id
+    updateProfileByUserId(userId, updates) {
+        const db = this.getAll();
+        if (!db) return null;
+        const profileIndex = db.profiles.findIndex(p => p.user_id === userId);
+        if (profileIndex === -1) return null;
+        db.profiles[profileIndex] = { ...db.profiles[profileIndex], ...updates };
+        this.save(db);
+        return db.profiles[profileIndex];
+    },
+
     // Obtener todos los admins
     getAdmins() {
         const users = this.getUsers();
