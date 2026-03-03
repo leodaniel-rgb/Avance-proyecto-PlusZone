@@ -1,7 +1,8 @@
 # Despliega el frontend en GitHub Pages (página web accesible).
 # Repositorio: leodaniel-rgb/Avance-proyecto-PlusZone
 # URL: https://leodaniel-rgb.github.io/Avance-proyecto-PlusZone/
-# Variables en Settings → Actions → Variables: API_BASE_URL, SUPABASE_URL, SUPABASE_ANON_KEY
+# Secrets en Settings → Secrets and variables → Actions → Secrets:
+#   API_BASE_URL, SUPABASE_URL, SUPABASE_ANON_KEY
 
 name: Deploy to GitHub Pages
 
@@ -37,10 +38,10 @@ jobs:
         run: |
           mkdir -p deploy
           cp -r client/* deploy/
-          API_BASE="${{ vars.API_BASE_URL }}"
+          API_BASE="${{ secrets.API_BASE_URL }}"
           API_BASE="${API_BASE%/}"
-          SUPABASE_URL="${{ vars.SUPABASE_URL }}"
-          SUPABASE_ANON_KEY="${{ vars.SUPABASE_ANON_KEY }}"
+          SUPABASE_URL="${{ secrets.SUPABASE_URL }}"
+          SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}"
           cat > deploy/config.js << EOF
           // Inyectado en deploy (leodaniel-rgb/Avance-proyecto-PlusZone)
           window.API_BASE = '${API_BASE}';
