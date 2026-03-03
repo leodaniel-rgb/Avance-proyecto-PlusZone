@@ -1105,9 +1105,15 @@ async function fetchProfiles() {
         }));
 
         if (profiles.length > 0) {
-            // Reemplazar lista principal
-            window.mockProfiles = profiles;
-            // Re-render filter options y tarjetas
+            // Reemplazar la fuente principal de perfiles por los datos reales de la API
+            state.allProfiles = profiles;
+
+            // Recalcular perfiles visibles según tipo de usuario y categoría
+            if (typeof filterProfilesByUserType === 'function') {
+                filterProfilesByUserType();
+            }
+
+            // Re-renderizar filtros, tarjetas y estadísticas
             if (typeof renderCategoryFilter === 'function') renderCategoryFilter();
             if (typeof renderCards === 'function') renderCards();
             if (typeof updateStats === 'function') updateStats();
@@ -2460,3 +2466,4 @@ function toggleMobileMenu() {
 }
 
 window.toggleMobileMenu = toggleMobileMenu;
+
