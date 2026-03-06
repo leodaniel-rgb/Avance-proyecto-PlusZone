@@ -2268,23 +2268,36 @@ function setupCardListeners(card) {
 }
 
 function handleSwipe(direction) {
-    if (state.currentIndex >= state.profiles.length) return;
-    
-    const currentProfile = state.profiles[state.currentIndex];
+    // Obtener el perfil de la card visible (por DOM) para que el match muestre siempre la empresa/oferta correcta
+    const topCard = document.querySelector('.professional-card.card-top');
+    let currentProfile = null;
+    if (topCard) {
+        const profileId = topCard.getAttribute('data-profile-id') || topCard.getAttribute('data-id');
+        if (profileId !== null && profileId !== '') {
+            const id = typeof state.profiles[0]?.id === 'number' ? parseInt(profileId, 10) : profileId;
+            currentProfile = state.profiles.find(p => p.id === id || p.id === profileId);
+        }
+        if (!currentProfile) currentProfile = state.profiles[state.currentIndex];
+    } else {
+        currentProfile = state.profiles[state.currentIndex];
+    }
+    if (!currentProfile || state.currentIndex >= state.profiles.length) return;
+
     state.swipedProfiles.push(currentProfile.id);
-    
+
     if (direction === 'right') {
         if (Math.random() > 0.7) {
-            state.matchedProfiles.push(currentProfile.id);
+            if (!state.matchedProfiles.includes(currentProfile.id)) state.matchedProfiles.push(currentProfile.id);
+            const profileToShow = { ...currentProfile };
             setTimeout(() => {
-                showMatchOverlay(currentProfile);
+                showMatchOverlay(profileToShow);
             }, 500);
         }
         addActivity('Interesado en ' + currentProfile.name, 'Has mostrado interés');
     } else {
         addActivity('Pasaste a ' + currentProfile.name, 'Continuemos buscando');
     }
-    
+
     state.currentIndex++;
     
     const card = document.querySelector('.card-top');
@@ -2488,18 +2501,21 @@ function showMatchOverlay(profile) {
     const overlay = document.getElementById('matchOverlay');
     const subtitle = document.getElementById('matchSubtitle');
     const profileDiv = document.getElementById('matchProfile');
-    
-    if (subtitle) subtitle.textContent = `Has hecho match con ${profile.name}`;
-    if (profileDiv) {
+    const isJob = profile && profile.role === 'job';
+    const displayName = profile ? profile.name : '';
+    const displayDesc = profile ? (isJob && profile.companyName ? `${profile.companyName} · ${profile.location || ''}`.trim() : (profile.description || '')) : '';
+
+    if (subtitle) subtitle.textContent = isJob ? `Has hecho match con ${profile.companyName || profile.name}` : `Has hecho match con ${displayName}`;
+    if (profileDiv && profile) {
         profileDiv.innerHTML = `
             <img src="${profile.imageUrl}" alt="${profile.name}" class="match-image">
             <div class="match-info">
                 <h2 class="match-name">${profile.name}</h2>
-                <p class="match-description">${profile.description}</p>
+                <p class="match-description">${displayDesc || profile.description || ''}</p>
             </div>
         `;
     }
-    
+
     if (overlay) overlay.style.display = 'flex';
 }
 
