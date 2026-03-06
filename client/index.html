@@ -99,6 +99,24 @@
                 </div>
                 <button type="submit" class="auth-button">Registrarse</button>
             </form>
+
+            <!-- Pantalla de verificación (Paso 2 tras registro con API) -->
+            <div id="authVerifyStep" class="auth-verify-step" style="display: none;">
+                <h2 class="auth-verify-title">Verifica tu correo</h2>
+                <p class="auth-verify-subtitle">Paso 2: ingresa el código de 7 dígitos que te enviamos</p>
+                <p id="authVerifyMessage" class="auth-verify-message"></p>
+                <div id="authVerifyDevCode" class="verify-dev-code auth-verify-devcode" style="display: none;" role="status"></div>
+                <div class="form-group">
+                    <label for="authVerifyCodeInput">Código de verificación</label>
+                    <input type="text" id="authVerifyCodeInput" placeholder="1234567" maxlength="7" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code">
+                </div>
+                <div id="authVerifyFeedback" class="auth-verify-feedback"></div>
+                <div class="auth-verify-actions">
+                    <button type="button" class="secondary-button" id="authVerifyBackBtn">Volver</button>
+                    <button type="button" class="secondary-button" id="authVerifyResendBtn">Reenviar código</button>
+                    <button type="button" class="auth-button" id="authVerifyConfirmBtn">Verificar y continuar</button>
+                </div>
+            </div>
             </div>
         </div>
     </div>
@@ -230,6 +248,11 @@
                             <div class="cards-stack" id="cardsStack">
                                 <!-- Las tarjetas se generarán dinámicamente -->
                             </div>
+                            <!-- Mensaje vacío centrado entre los dos botones (mismo hueco que las cards) -->
+                            <div class="swipe-container-empty" id="emptyState" style="display: none;">
+                                <h2>¡No hay más perfiles disponibles!</h2>
+                                <p>Has visto todas las ofertas disponibles. Vuelve más tarde para ver nuevas oportunidades.</p>
+                            </div>
                             <button class="action-button action-pass" id="passButton" aria-label="Pasar">
                                 ✕
                             </button>
@@ -237,11 +260,6 @@
                         <!-- Contenedor para paneles de detalles -->
                         <div class="card-details-container" id="cardDetailsContainer">
                             <!-- Los paneles se generarán dinámicamente -->
-                        </div>
-
-                        <div class="swipe-container-empty" id="emptyState" style="display: none;">
-                            <h2>¡No hay más perfiles disponibles!</h2>
-                            <p>Vuelve más tarde para ver nuevos candidatos y ofertas.</p>
                         </div>
                     </div>
                 </div>
@@ -418,7 +436,8 @@
                             <div class="profile-header">
                                 <div class="profile-avatar" id="profileAvatar">
                                     <img id="profileImage" src="" alt="Avatar">
-                                    <button class="edit-avatar-btn" onclick="editProfileImage()">✏️</button>
+                                    <input type="file" id="profileImageInput" accept="image/*" style="display: none;" onchange="handleProfileImageFile(event)">
+                                    <button type="button" class="edit-avatar-btn" onclick="document.getElementById('profileImageInput').click()" title="Cambiar foto">✏️</button>
                                 </div>
                                 <div class="profile-info">
                                     <h2 id="profileName"></h2>
@@ -527,6 +546,12 @@
                                         <input type="text" id="editSalaryExpected" placeholder="Ej: $80,000 - $120,000">
                                     </div>
                                 </div>
+                                <div class="form-group">
+                                    <label>Documentos adjuntos (CV, certificaciones)</label>
+                                    <input type="file" id="editAttachments" multiple accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" onchange="handleAttachmentFiles(event)">
+                                    <p class="form-hint">Puedes subir tu CV o certificados (PDF, Word o imágenes). Máx. ~2 MB por archivo.</p>
+                                    <ul class="attachments-list" id="attachmentsList"></ul>
+                                </div>
                                 <button type="submit" class="save-button">Guardar Cambios</button>
                             </form>
                         </div>
@@ -616,6 +641,7 @@
             </div>
             <div class="modal-body">
                 <p id="verifyMessage">Se ha enviado un código de verificación de 7 dígitos a tu correo. Ingresa el código a continuación.</p>
+                <div id="verifyDevCode" class="verify-dev-code" style="display: none;" role="status"></div>
                 <div class="form-group">
                     <label for="verifyCodeInput">Código de verificación</label>
                     <input type="text" id="verifyCodeInput" placeholder="1234567" maxlength="7" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code">
@@ -629,6 +655,9 @@
             </div>
         </div>
     </div>
+
+    <!-- Notificación in-app (toast) -->
+    <div id="appToast" class="app-toast" role="status" aria-live="polite"></div>
 
     <!-- Socket.IO y Supabase (Auth sin SMTP) -->
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>

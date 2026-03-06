@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
 const http = require('http');
@@ -345,8 +345,11 @@ app.post('/api/auth/register', async (req, res) => {
       if (sendResult.sent) {
         return res.json({ ok: true, message: 'Cuenta existente pendiente de verificación. Se ha reenviado un código.' });
       }
+      const allowDevCodeResend = process.env.NODE_ENV !== 'production' || (process.env.ALLOW_DEV_CODE_IN_RESPONSE || '').toLowerCase() === 'true';
       if (sendResult.fallback) {
-        return res.json({ ok: true, warning: 'Cuenta pendiente de verificación. No se pudo enviar el correo; el código ha sido registrado en el servidor para desarrollo.' });
+        const payload = { ok: true, warning: 'No se pudo enviar el correo. Código guardado en el servidor (verification_debug.log).' };
+        if (allowDevCodeResend && code) payload.devCode = code;
+        return res.json(payload);
       }
       console.error('Error enviando email de reenvío para usuario existente:', sendResult.error || 'unknown');
       return res.status(500).json({ error: 'No se pudo enviar el correo de verificación. Contacta al administrador.' });
@@ -381,11 +384,16 @@ app.post('/api/auth/register', async (req, res) => {
     if (sendResult.sent) {
       return res.json({ ok: true, message: 'Usuario registrado. Revisa tu correo para verificar la cuenta.' });
     }
+    const allowDevCode = process.env.NODE_ENV !== 'production' || (process.env.ALLOW_DEV_CODE_IN_RESPONSE || '').toLowerCase() === 'true';
     if (sendResult.fallback) {
-      return res.json({ ok: true, warning: 'Cuenta creada, pero no se pudo enviar el correo de verificación. En desarrollo, el código se guardó en el servidor para depuración.' });
+      const payload = { ok: true, warning: 'Cuenta creada, pero no se pudo enviar el correo. Revisa la consola del servidor o el archivo verification_debug.log en la carpeta server.' };
+      if (allowDevCode && code) payload.devCode = code;
+      return res.json(payload);
     }
     console.error('Usuario creado pero no se pudo enviar email de verificación:', sendResult.error || 'unknown');
-    res.json({ ok: true, warning: 'Cuenta creada, pero no se pudo enviar el correo de verificación. Usa /api/auth/resend cuando la configuración de email esté disponible.' });
+    const payload = { ok: true, warning: 'Cuenta creada, pero no se pudo enviar el correo de verificación. Usa Reenviar código en el modal o configura el email.' };
+    if (allowDevCode && code) payload.devCode = code;
+    res.json(payload);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Error interno' });
@@ -462,8 +470,11 @@ app.post('/api/auth/resend', async (req, res) => {
     if (sendResult.sent) {
       return res.json({ ok: true, message: 'Código reenviado. Revisa tu correo.' });
     }
+    const allowDevCodeResend = process.env.NODE_ENV !== 'production' || (process.env.ALLOW_DEV_CODE_IN_RESPONSE || '').toLowerCase() === 'true';
     if (sendResult.fallback) {
-      return res.json({ ok: true, warning: 'Código registrado en el servidor para desarrollo. Revisa el archivo de depuración.' });
+      const payload = { ok: true, warning: 'No se pudo enviar el correo. Revisa verification_debug.log en la carpeta server.' };
+      if (allowDevCodeResend && code) payload.devCode = code;
+      return res.json(payload);
     }
     console.error('Error reenviando código:', sendResult.error || 'unknown');
     res.status(500).json({ error: 'Error interno' });

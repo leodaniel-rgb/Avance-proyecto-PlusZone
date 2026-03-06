@@ -2,7 +2,7 @@ require('dotenv').config();
 const path = require('path');
 const fs = require('fs');
 const { pool } = require('./db');
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 
 const SQL_PATH = path.resolve(__dirname, '..', 'database', 'pluszone_supabase.sql');
 

@@ -620,6 +620,20 @@ const mockCompanies = [
     }
 ];
 
+// Notificación in-app (toast) — reemplaza alert para mensajes de éxito
+let toastTimeout = null;
+function showToast(message, type = 'success') {
+    const el = document.getElementById('appToast');
+    if (!el) return;
+    el.textContent = message;
+    el.className = 'app-toast show ' + (type === 'success' ? 'success' : '');
+    if (toastTimeout) clearTimeout(toastTimeout);
+    toastTimeout = setTimeout(() => {
+        el.classList.remove('show');
+        toastTimeout = null;
+    }, 3500);
+}
+
 // Estado global
 const state = {
     allProfiles: [...mockProfiles], // Todos los perfiles disponibles
@@ -634,6 +648,66 @@ const state = {
     companyJobs: [],
     selectedCategory: 'Todas' // Categoría seleccionada para filtrar
 };
+
+// Cargar ofertas de la empresa desde la DB (para "Mis Ofertas" y que la empresa vea sus datos)
+function loadCompanyJobsFromDatabase() {
+    if (typeof Database === 'undefined' || !state.currentUser || state.currentUser.type !== 'company') return;
+    const jobProfiles = Database.getJobProfilesByUserId(state.currentUser.id);
+    state.companyJobs = jobProfiles.map(p => ({
+        id: p.id,
+        title: p.name,
+        description: p.detailed_description || p.description || '',
+        salary: p.salary || '',
+        location: p.location || 'Remoto',
+        techStack: Array.isArray(p.tech_stack) ? p.tech_stack : [],
+        active: true,
+        category: p.category
+    }));
+}
+
+// Cargar perfiles desde la base de datos para que Discover y Matches muestren datos reales
+function loadAllProfilesFromDatabase() {
+    if (typeof Database === 'undefined') return;
+    const db = Database.getAll();
+    if (!db || !db.profiles || !db.profiles.length) return;
+    const users = db.users || [];
+    const userById = {};
+    users.forEach(u => { userById[u.id] = u; });
+    state.allProfiles = db.profiles.map(p => {
+        const user = p.user_id ? userById[p.user_id] : null;
+        const base = {
+            id: p.id,
+            user_id: p.user_id,
+            name: p.name,
+            description: p.description || '',
+            detailedDescription: p.detailed_description || p.description || '',
+            tagline: p.tagline || '',
+            company_description: p.company_description || '',
+            about_me: p.about_me || '',
+            techStack: Array.isArray(p.tech_stack) ? p.tech_stack : [],
+            imageUrl: p.image_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400&h=400&fit=crop',
+            role: p.role,
+            salary: p.salary,
+            category: p.category,
+            location: p.location,
+            companyName: p.company_name,
+            industry: p.industry,
+            companySize: p.company_size
+        };
+        if (p.role === 'candidate' && user) {
+            base.experience = user.experience;
+            base.availability = user.availability;
+            base.preferredLocation = user.preferred_location;
+            base.salaryExpected = user.salary_expected || p.salary;
+            base.location = base.location || user.preferred_location;
+        }
+        if (p.role === 'job') {
+            base.companyName = base.companyName || p.company_name;
+            base.location = base.location || p.location;
+        }
+        return base;
+    });
+}
 
 // Función para filtrar perfiles según el tipo de usuario y categoría
 function filterProfilesByUserType() {
@@ -815,8 +889,9 @@ async function handleLogin(e) {
         }
     }
 
-    // 2) API legacy (código 7 dígitos)
-    try {
+    // 2) API legacy (solo si hay URL válida y no estamos en file:// para evitar CORS)
+    const canUseApi = API_BASE && (API_BASE.startsWith('http://') || API_BASE.startsWith('https://')) && window.location.protocol !== 'file:';
+    if (canUseApi) try {
         const resp = await fetch(API_BASE + '/api/auth/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -866,7 +941,8 @@ async function handleLogin(e) {
                     type: adminUser.user_type,
                     imageUrl: adminUser.image_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400&h=400&fit=crop',
                     description: adminUser.description || '',
-                    techStack: adminUser.tech_stack || []
+                    techStack: adminUser.tech_stack || [],
+                    attachments: adminUser.attachments || []
                 };
 
                 const authScreen = document.getElementById('authScreen');
@@ -908,8 +984,24 @@ async function handleLogin(e) {
             type: user.user_type,
             imageUrl: user.image_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400&h=400&fit=crop',
             description: user.description || '',
-            techStack: user.tech_stack || []
+            techStack: user.tech_stack || [],
+            companyName: user.company_name,
+            companySize: user.company_size,
+            industry: user.industry,
+            companyLocation: user.company_location,
+            companyWebsite: user.company_website,
+            experience: user.experience,
+            availability: user.availability,
+            preferredLocation: user.preferred_location,
+            salaryExpected: user.salary_expected,
+            attachments: user.attachments || []
         };
+
+        // Usar perfiles reales de la base de datos en Discover y Matches
+        if (typeof Database !== 'undefined') {
+            loadAllProfilesFromDatabase();
+            if (state.currentUser.type === 'company') loadCompanyJobsFromDatabase();
+        }
 
         const authScreen = document.getElementById('authScreen');
         const app = document.getElementById('app');
@@ -1041,12 +1133,14 @@ async function handleRegister(e) {
             showAuthError('registerForm', data.error || 'Error en el registro');
             return;
         }
-        showAuthSuccess('registerForm', 'Cuenta creada. Se ha enviado un código de verificación a tu correo.');
-        window._pendingVerification = { email, password, name };
-        openVerifyModal(email, 'Se ha enviado un código de verificación a ' + email);
+        showAuthSuccess('registerForm', data.message || data.warning || 'Cuenta creada. Revisa tu correo o el código de desarrollo.');
+        window._pendingVerification = { email, password, name, devCode: data.devCode || null };
+        showAuthVerificationStep(email, data.devCode ? 'No se pudo enviar el correo. Usa el código de desarrollo que aparece abajo.' : ('Se ha enviado un código de 7 dígitos a ' + email + '. Revísalo en tu bandeja o usa el código de desarrollo si aparece abajo.'), data.devCode);
         return;
     } catch (err) {
         console.error(err);
+        showAuthError('registerForm', 'No se pudo conectar con el servidor. Para la demo con API, arranca el servidor (node server/index.js) y vuelve a intentar.');
+        return;
     }
 
     // Sin backend: guardar en base de datos local para que el login las encuentre después
@@ -1076,8 +1170,13 @@ async function handleRegister(e) {
 }
 
 // Funciones auxiliares para mostrar mensajes
-// Obtener perfiles desde el servidor (si existe API)
+// Obtener perfiles desde el servidor (solo si hay API válida; desde file:// usar DB local)
 async function fetchProfiles() {
+    const canUseApi = API_BASE && (API_BASE.startsWith('http://') || API_BASE.startsWith('https://')) && window.location.protocol !== 'file:';
+    if (!canUseApi) {
+        if (typeof Database !== 'undefined') loadAllProfilesFromDatabase();
+        return;
+    }
     try {
         const resp = await fetch(API_BASE + '/api/profiles');
         const data = await resp.json();
@@ -1120,14 +1219,16 @@ async function fetchProfiles() {
         }
     } catch (err) {
         console.warn('fetchProfiles error:', err);
+        if (typeof Database !== 'undefined') loadAllProfilesFromDatabase();
     }
 }
 
-// Conexión Socket.IO (notificaciones en tiempo real)
+// Conexión Socket.IO solo cuando hay API (evita errores en file://)
 (function setupSocket() {
+    const canUseApi = API_BASE && (API_BASE.startsWith('http://') || API_BASE.startsWith('https://')) && window.location.protocol !== 'file:';
+    if (!canUseApi || typeof io !== 'function') return;
     try {
-        if (typeof io === 'function') {
-            const socket = API_BASE ? io(API_BASE, { path: '/socket.io' }) : io();
+        const socket = io(API_BASE, { path: '/socket.io' });
             window.socket = socket;
 
             socket.on('connect', () => {
@@ -1159,9 +1260,6 @@ async function fetchProfiles() {
             socket.on('disconnect', () => {
                 console.log('Socket.IO desconectado');
             });
-        } else {
-            console.warn('Socket.IO client no disponible en esta página.');
-        }
     } catch (err) {
         console.warn('Error al inicializar Socket.IO:', err);
     }
@@ -1230,10 +1328,158 @@ function clearAuthErrors() {
     document.querySelectorAll('.auth-error, .auth-success').forEach(el => el.remove());
 }
 
-// --- Modal de verificación y handlers ---
-function openVerifyModal(email, message) {
+// --- Pantalla de verificación (Paso 2 tras registro con API) ---
+function showAuthVerificationStep(email, message, devCode) {
+    const authTabs = document.querySelector('.auth-tabs');
+    const loginForm = document.getElementById('loginForm');
+    const registerForm = document.getElementById('registerForm');
+    const stepEl = document.getElementById('authVerifyStep');
+    const msgEl = document.getElementById('authVerifyMessage');
+    const devCodeEl = document.getElementById('authVerifyDevCode');
+    const inputEl = document.getElementById('authVerifyCodeInput');
+    const feedbackEl = document.getElementById('authVerifyFeedback');
+
+    if (!stepEl) return;
+    if (authTabs) authTabs.style.display = 'none';
+    if (loginForm) loginForm.style.display = 'none';
+    if (registerForm) registerForm.style.display = 'none';
+
+    if (msgEl) msgEl.textContent = message || 'Ingresa el código de 7 dígitos que te enviamos por correo.';
+    if (devCodeEl) {
+        if (devCode) {
+            devCodeEl.textContent = 'Tu código (desarrollo): ' + devCode;
+            devCodeEl.style.display = 'block';
+            if (inputEl) inputEl.value = devCode;
+        } else {
+            devCodeEl.textContent = '';
+            devCodeEl.style.display = 'none';
+        }
+    }
+    if (inputEl && !devCode) inputEl.value = '';
+    if (feedbackEl) { feedbackEl.textContent = ''; feedbackEl.style.color = ''; }
+
+    stepEl.style.display = 'block';
+    stepEl.dataset.verificationEmail = email;
+}
+
+function hideAuthVerificationStep() {
+    const authTabs = document.querySelector('.auth-tabs');
+    const loginForm = document.getElementById('loginForm');
+    const registerForm = document.getElementById('registerForm');
+    const stepEl = document.getElementById('authVerifyStep');
+    if (authTabs) authTabs.style.display = '';
+    if (loginForm) loginForm.style.display = '';
+    if (registerForm) registerForm.style.display = 'none';
+    if (stepEl) stepEl.style.display = 'none';
+}
+
+function setAuthVerifyFeedback(text, isError) {
+    const el = document.getElementById('authVerifyFeedback');
+    if (!el) return;
+    el.style.color = isError ? '#c0392b' : '#27ae60';
+    el.textContent = text;
+}
+
+async function handleAuthVerifyConfirm() {
+    const pending = window._pendingVerification;
+    const inputEl = document.getElementById('authVerifyCodeInput');
+    const confirmBtn = document.getElementById('authVerifyConfirmBtn');
+    if (!pending || !pending.email) { setAuthVerifyFeedback('Sesión de verificación perdida. Vuelve a registrarte.', true); return; }
+    const code = (inputEl && inputEl.value || '').trim();
+    if (code.length !== 7 || !/^\d+$/.test(code)) {
+        setAuthVerifyFeedback('Ingresa un código de 7 dígitos válido.', true);
+        return;
+    }
+    if (confirmBtn) confirmBtn.disabled = true;
+    setAuthVerifyFeedback('Verificando...', false);
+
+    try {
+        const resp = await fetch(API_BASE + '/api/auth/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: pending.email, code })
+        });
+        const data = await resp.json();
+        if (!resp.ok) {
+            setAuthVerifyFeedback(data.error || 'Error al verificar.', true);
+            if (confirmBtn) confirmBtn.disabled = false;
+            return;
+        }
+        setAuthVerifyFeedback('Correo verificado correctamente.', false);
+        try {
+            const loginResp = await fetch(API_BASE + '/api/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: pending.email, password: pending.password })
+            });
+            const loginData = await loginResp.json();
+            if (loginResp.ok && loginData.user) {
+                state.currentUser = {
+                    id: loginData.user.id,
+                    email: loginData.user.email,
+                    name: loginData.user.name,
+                    type: loginData.user.type,
+                    imageUrl: loginData.user.imageUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400&h=400&fit=crop',
+                    description: loginData.user.description || '',
+                    techStack: []
+                };
+                document.getElementById('authScreen').style.display = 'none';
+                document.getElementById('app').style.display = 'flex';
+                hideAuthVerificationStep();
+                showMainApp();
+                addActivity('Bienvenido a PlusZone', 'Has iniciado sesión correctamente');
+                return;
+            }
+        } catch (e) { console.warn('Auto-login falló:', e); }
+        setAuthVerifyFeedback('Verificado. Ya puedes iniciar sesión con tu correo y contraseña.', false);
+        hideAuthVerificationStep();
+        setTimeout(() => { document.querySelector('.auth-tabs').style.display = ''; document.getElementById('loginForm').style.display = ''; }, 100);
+    } catch (err) {
+        console.error(err);
+        setAuthVerifyFeedback('Error de conexión. Intenta de nuevo.', true);
+        if (confirmBtn) confirmBtn.disabled = false;
+    }
+}
+
+let _authResendCooldown = 0;
+async function handleAuthVerifyResend() {
+    const pending = window._pendingVerification;
+    const resendBtn = document.getElementById('authVerifyResendBtn');
+    if (!pending || !pending.email) { setAuthVerifyFeedback('No se puede reenviar. Vuelve a registrarte.', true); return; }
+    if (_authResendCooldown > Date.now()) { setAuthVerifyFeedback('Espera un momento antes de reenviar.', true); return; }
+    if (resendBtn) resendBtn.disabled = true;
+    setAuthVerifyFeedback('Reenviando código...', false);
+    try {
+        const resp = await fetch(API_BASE + '/api/auth/resend', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: pending.email }) });
+        const data = await resp.json();
+        if (!resp.ok) { setAuthVerifyFeedback(data.error || 'Error al reenviar.', true); if (resendBtn) resendBtn.disabled = false; return; }
+        if (data.devCode) {
+            window._pendingVerification.devCode = data.devCode;
+            const devCodeEl = document.getElementById('authVerifyDevCode');
+            const inputEl = document.getElementById('authVerifyCodeInput');
+            if (devCodeEl) { devCodeEl.textContent = 'Tu código (desarrollo): ' + data.devCode; devCodeEl.style.display = 'block'; }
+            if (inputEl) inputEl.value = data.devCode;
+        }
+        setAuthVerifyFeedback(data.devCode ? 'Código de desarrollo actualizado abajo.' : 'Código reenviado. Revisa tu correo.', false);
+        _authResendCooldown = Date.now() + 30000;
+        setTimeout(() => { if (resendBtn) resendBtn.disabled = false; }, 30000);
+    } catch (err) {
+        setAuthVerifyFeedback('Error de conexión.', true);
+        if (resendBtn) resendBtn.disabled = false;
+    }
+}
+
+function handleAuthVerifyBack() {
+    hideAuthVerificationStep();
+    document.querySelector('.auth-tabs').style.display = '';
+    document.getElementById('loginForm').style.display = '';
+}
+
+// --- Modal de verificación (reserva: login cuando no verificado) ---
+function openVerifyModal(email, message, devCode) {
     const modal = document.getElementById('verifyModal');
     const msg = document.getElementById('verifyMessage');
+    const devCodeEl = document.getElementById('verifyDevCode');
     const input = document.getElementById('verifyCodeInput');
     const feedback = document.getElementById('verifyFeedback');
     const resendBtn = document.getElementById('resendCodeBtn');
@@ -1241,7 +1487,17 @@ function openVerifyModal(email, message) {
 
     if (!modal) return;
     if (msg) msg.textContent = message || 'Se ha enviado un código de verificación a tu correo. Ingresa el código a continuación.';
-    if (input) input.value = '';
+    if (devCodeEl) {
+        if (devCode) {
+            devCodeEl.textContent = 'Tu código (desarrollo): ' + devCode;
+            devCodeEl.style.display = 'block';
+            if (input) input.value = devCode;
+        } else {
+            devCodeEl.textContent = '';
+            devCodeEl.style.display = 'none';
+        }
+    }
+    if (input && !devCode) input.value = '';
     if (feedback) {
         feedback.textContent = '';
         feedback.style.color = '#333';
@@ -1250,7 +1506,6 @@ function openVerifyModal(email, message) {
     if (confirmBtn) confirmBtn.disabled = false;
 
     modal.style.display = 'flex';
-    // Save the email we're verifying on the modal element for convenience
     modal.dataset.verificationEmail = email;
 }
 
@@ -1387,8 +1642,14 @@ async function handleResendCode() {
             return;
         }
 
-        setVerifyFeedback('Código reenviado. Revisa tu correo.', false);
-        // Establecer cooldown de 30 segundos para evitar rapid re-sends
+        const devCodeEl = document.getElementById('verifyDevCode');
+        const codeInput = document.getElementById('verifyCodeInput');
+        if (data.devCode && devCodeEl) {
+            devCodeEl.textContent = 'Tu código (desarrollo): ' + data.devCode;
+            devCodeEl.style.display = 'block';
+            if (codeInput) codeInput.value = data.devCode;
+        }
+        setVerifyFeedback(data.devCode ? 'Código de desarrollo mostrado abajo.' : 'Código reenviado. Revisa tu correo.', false);
         _resendCooldown = Date.now() + 30 * 1000;
         setTimeout(() => {
             if (resendBtn) resendBtn.disabled = false;
@@ -1438,15 +1699,16 @@ function showMainApp() {
         if (typeof updateUserInfo === 'function') updateUserInfo();
         if (typeof loadProfile === 'function') loadProfile();
 
-        // Obtener perfiles desde la API si está disponible
+        // Obtener perfiles: API si hay URL válida; si no (p. ej. file://), usar DB local
         if (typeof fetchProfiles === 'function') {
             fetchProfiles().then(() => {
+                if (typeof filterProfilesByUserType === 'function') filterProfilesByUserType();
                 if (typeof renderCards === 'function') renderCards();
             }).catch(() => {
+                if (typeof Database !== 'undefined') loadAllProfilesFromDatabase();
+                if (typeof filterProfilesByUserType === 'function') filterProfilesByUserType();
                 if (typeof renderCards === 'function') renderCards();
             });
-
-    
         } else {
             if (typeof renderCards === 'function') renderCards();
         }
@@ -1585,15 +1847,17 @@ function loadProfile() {
     if (editAvailability) editAvailability.value = state.currentUser.availability || '';
     if (editPreferredLocation) editPreferredLocation.value = state.currentUser.preferredLocation || '';
     if (editSalaryExpected) editSalaryExpected.value = state.currentUser.salaryExpected || '';
+    
+    renderAttachmentsList();
 }
 
 function saveProfile(e) {
     e.preventDefault();
     if (!state.currentUser) return;
     
-    state.currentUser.name = document.getElementById('editName').value;
-    state.currentUser.email = document.getElementById('editEmail').value;
-    state.currentUser.description = document.getElementById('editDescription').value;
+    state.currentUser.name = document.getElementById('editName').value.trim();
+    state.currentUser.email = document.getElementById('editEmail').value.trim();
+    state.currentUser.description = document.getElementById('editDescription').value.trim();
     const techStackStr = document.getElementById('editTechStack').value;
     state.currentUser.techStack = techStackStr.split(',').map(t => t.trim()).filter(t => t);
     
@@ -1604,11 +1868,11 @@ function saveProfile(e) {
         const editCompanyLocation = document.getElementById('editCompanyLocation');
         const editCompanyWebsite = document.getElementById('editCompanyWebsite');
         
-        if (editCompanyName) state.currentUser.companyName = editCompanyName.value;
+        if (editCompanyName) state.currentUser.companyName = editCompanyName.value.trim();
         if (editCompanySize) state.currentUser.companySize = editCompanySize.value;
         if (editIndustry) state.currentUser.industry = editIndustry.value;
-        if (editCompanyLocation) state.currentUser.companyLocation = editCompanyLocation.value;
-        if (editCompanyWebsite) state.currentUser.companyWebsite = editCompanyWebsite.value;
+        if (editCompanyLocation) state.currentUser.companyLocation = editCompanyLocation.value.trim();
+        if (editCompanyWebsite) state.currentUser.companyWebsite = editCompanyWebsite.value.trim();
     } else {
         const editExperience = document.getElementById('editExperience');
         const editAvailability = document.getElementById('editAvailability');
@@ -1618,23 +1882,108 @@ function saveProfile(e) {
         if (editExperience) state.currentUser.experience = editExperience.value;
         if (editAvailability) state.currentUser.availability = editAvailability.value;
         if (editPreferredLocation) state.currentUser.preferredLocation = editPreferredLocation.value;
-        if (editSalaryExpected) state.currentUser.salaryExpected = editSalaryExpected.value;
+        if (editSalaryExpected) state.currentUser.salaryExpected = editSalaryExpected.value.trim();
+    }
+    
+    // Persistir en la base de datos (localStorage) si existe Database y el usuario viene de ahí
+    if (typeof Database !== 'undefined' && state.currentUser.id && typeof state.currentUser.id === 'number') {
+        const userUpdates = {
+            name: state.currentUser.name,
+            email: state.currentUser.email,
+            image_url: state.currentUser.imageUrl || '',
+            description: state.currentUser.description || '',
+            tech_stack: state.currentUser.techStack || [],
+            company_name: state.currentUser.companyName,
+            company_size: state.currentUser.companySize,
+            industry: state.currentUser.industry,
+            company_location: state.currentUser.companyLocation,
+            company_website: state.currentUser.companyWebsite,
+            experience: state.currentUser.experience,
+            availability: state.currentUser.availability,
+            preferred_location: state.currentUser.preferredLocation,
+            salary_expected: state.currentUser.salaryExpected,
+            attachments: state.currentUser.attachments || []
+        };
+        Database.updateUser(state.currentUser.id, userUpdates);
+        // Sincronizar perfil público solo para empleados (candidatos); para empresa no tocamos perfiles de ofertas
+        if (state.currentUser.type !== 'company') {
+            Database.updateProfileByUserId(state.currentUser.id, {
+                name: state.currentUser.name,
+                description: state.currentUser.description || '',
+                detailed_description: state.currentUser.detailedDescription || state.currentUser.description || '',
+                tech_stack: state.currentUser.techStack || [],
+                image_url: state.currentUser.imageUrl || ''
+            });
+        }
     }
     
     loadProfile();
     updateUserInfo();
     addActivity('Perfil actualizado', 'Tus cambios se han guardado correctamente');
-    
-    alert('Perfil actualizado exitosamente');
+    showToast('Perfil actualizado exitosamente');
 }
 
-function editProfileImage() {
-    const newImageUrl = prompt('Ingresa la URL de tu nueva imagen:');
-    if (newImageUrl) {
-        state.currentUser.imageUrl = newImageUrl;
+function handleProfileImageFile(event) {
+    const file = event.target && event.target.files[0];
+    if (!file || !state.currentUser) return;
+    if (!file.type.startsWith('image/')) {
+        alert('Por favor elige una imagen (JPG, PNG, etc.).');
+        return;
+    }
+    const reader = new FileReader();
+    reader.onload = function () {
+        state.currentUser.imageUrl = reader.result;
         loadProfile();
         addActivity('Imagen de perfil actualizada', 'Tu nueva foto se ha guardado');
+        event.target.value = '';
+    };
+    reader.readAsDataURL(file);
+}
+
+function handleAttachmentFiles(event) {
+    const files = event.target && event.target.files;
+    if (!files || !files.length || !state.currentUser) return;
+    if (!state.currentUser.attachments) state.currentUser.attachments = [];
+    const maxSize = 2 * 1024 * 1024; // 2 MB
+    for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        if (file.size > maxSize) {
+            alert(`El archivo "${file.name}" supera 2 MB. No se subirá.`);
+            continue;
+        }
+        const reader = new FileReader();
+        reader.onload = (function (f) {
+            return function () {
+                state.currentUser.attachments.push({
+                    name: f.name,
+                    type: f.type,
+                    size: f.size,
+                    data: reader.result
+                });
+                renderAttachmentsList();
+            };
+        })(file);
+        reader.readAsDataURL(file);
     }
+    event.target.value = '';
+}
+
+function removeAttachment(index) {
+    if (!state.currentUser || !state.currentUser.attachments) return;
+    state.currentUser.attachments.splice(index, 1);
+    renderAttachmentsList();
+}
+
+function renderAttachmentsList() {
+    const list = document.getElementById('attachmentsList');
+    if (!list) return;
+    const attachments = state.currentUser && state.currentUser.attachments ? state.currentUser.attachments : [];
+    list.innerHTML = attachments.map((att, i) => `
+        <li class="attachment-item">
+            <span class="attachment-name">${att.name}</span>
+            <button type="button" class="attachment-remove" onclick="removeAttachment(${i})" title="Quitar">×</button>
+        </li>
+    `).join('');
 }
 
 function updateUserInfo() {
@@ -1715,18 +2064,17 @@ function createCardHTML(profile, isTop = false) {
                 </div>
                 <div class="card-content">
                     <h2 class="card-name">${profile.name}</h2>
-                    <p class="card-description">${profile.description}</p>
+                    ${profile.tagline ? `<p class="card-tagline">${profile.tagline}</p>` : ''}
+                    ${isJob ? `<p class="card-company-description">${profile.company_description || profile.detailedDescription || profile.description || ''}</p>` : `<p class="card-candidate-description">${profile.about_me || profile.description || ''}</p>`}
                     ${profile.salary ? `<p class="card-salary">💰 ${profile.salary}</p>` : ''}
                     ${additionalInfo}
                     <div class="card-tags">
-                        ${profile.techStack.slice(0, 4).map(tech => `<span class="tag">${tech}</span>`).join('')}
+                        ${(profile.techStack || []).slice(0, 4).map(tech => `<span class="tag">${tech}</span>`).join('')}
                     </div>
-                    ${isTop ? `
-                        <button class="card-expand-btn" onclick="event.stopPropagation(); toggleCardDetails('${profile.id}')" aria-label="Ver más detalles">
-                            <span class="expand-icon" id="icon-${profile.id}">▼</span>
-                            <span class="expand-text" id="text-${profile.id}">Ver más detalles</span>
-                        </button>
-                    ` : ''}
+                    <button class="card-expand-btn" onclick="event.stopPropagation(); toggleCardDetails('${profile.id}')" aria-label="Ver detalles de la oferta">
+                        <span class="expand-icon" id="icon-${profile.id}">▼</span>
+                        <span class="expand-text" id="text-${profile.id}">${isJob ? 'Ver detalles de la oferta' : 'Ver más detalles'}</span>
+                    </button>
                 </div>
             </div>
             <div class="swipe-stamp interested" style="display: none;">INTERESADO</div>
@@ -1738,12 +2086,39 @@ function createCardHTML(profile, isTop = false) {
 function createDetailsPanel(profile) {
     const isCandidate = profile.role === 'candidate';
     const isJob = profile.role === 'job';
-    
+    const techStack = profile.techStack && Array.isArray(profile.techStack) ? profile.techStack : [];
+    const jobExtras = isJob ? `
+                    <div class="card-details-section">
+                        <h4 class="card-details-subtitle">Requisitos</h4>
+                        <ul class="card-details-list">
+                            <li>Experiencia en las tecnologías indicadas (${techStack.slice(0, 3).join(', ') || 'ver descripción'})</li>
+                            <li>Trabajo en equipo y comunicación efectiva</li>
+                            <li>Disponibilidad ${profile.location === 'Remoto' ? 'para trabajo remoto' : profile.location === 'Híbrido' ? 'para modelo híbrido' : 'para trabajo presencial'}</li>
+                        </ul>
+                    </div>
+                    <div class="card-details-section">
+                        <h4 class="card-details-subtitle">Ofrecemos</h4>
+                        <ul class="card-details-list">
+                            <li>Salario competitivo según experiencia</li>
+                            <li>Ambiente de trabajo colaborativo</li>
+                            <li>Oportunidades de crecimiento</li>
+                        </ul>
+                    </div>
+                    ${profile.companyName ? `
+                    <div class="card-details-section">
+                        <h4 class="card-details-subtitle">Sobre la empresa</h4>
+                        <p class="card-details-description">${profile.companyName}${profile.industry ? ' — ' + profile.industry : ''}${profile.companySize ? '. ' + profile.companySize + ' empleados.' : ''} ${profile.detailedDescription || profile.description || ''}</p>
+                    </div>
+                    ` : ''}
+                ` : '';
     return `
         <div class="card-details-panel" id="details-${profile.id}" style="display: none;">
             <div class="card-details-content">
                 <h3 class="card-details-title">${isCandidate ? 'Acerca del Candidato' : 'Detalles de la Oferta'}</h3>
-                <p class="card-details-description">${profile.detailedDescription}</p>
+                ${profile.tagline ? `<p class="card-details-tagline">${profile.tagline}</p>` : ''}
+                ${isJob && profile.company_description ? `<p class="card-details-description card-details-company-block">${profile.company_description}</p>` : ''}
+                ${isCandidate && profile.about_me ? `<p class="card-details-description card-details-candidate-block">${profile.about_me}</p>` : ''}
+                <p class="card-details-description">${profile.detailedDescription || profile.description || ''}</p>
                 ${isCandidate ? `
                     <div class="card-details-info">
                         ${profile.experience ? `<p><strong>Experiencia:</strong> ${profile.experience}</p>` : ''}
@@ -1760,12 +2135,14 @@ function createDetailsPanel(profile) {
                         ${profile.industry ? `<p><strong>Industria:</strong> ${profile.industry}</p>` : ''}
                         ${profile.companySize ? `<p><strong>Tamaño de empresa:</strong> ${profile.companySize}</p>` : ''}
                         ${profile.category ? `<p><strong>Categoría:</strong> ${profile.category}</p>` : ''}
+                        ${profile.salary ? `<p><strong>💰 Rango salarial:</strong> ${profile.salary}</p>` : ''}
                     </div>
+                    ${jobExtras}
                 ` : ''}
                 <div class="card-details-tech">
                     <h4 class="tech-stack-title">${isCandidate ? 'Stack Tecnológico:' : 'Tecnologías Requeridas:'}</h4>
                     <div class="tech-stack-list">
-                        ${profile.techStack.map(tech => `<span class="tag">${tech}</span>`).join('')}
+                        ${techStack.map(tech => `<span class="tag">${tech}</span>`).join('')}
                     </div>
                 </div>
                 <button class="card-close-btn" onclick="toggleCardDetails('${profile.id}')">Cerrar</button>
@@ -1836,24 +2213,22 @@ function renderCategoryFilter() {
 
 function filterByCategory(category) {
     state.selectedCategory = category;
-    state.currentIndex = 0;
-    state.swipedProfiles = [];
+    filterProfilesByUserType(); // actualizar state.profiles por categoría y resetear índice
     renderCategoryFilter();
     renderCards();
 }
 
 function renderCards() {
-    // Filtrar perfiles según el tipo de usuario y categoría
-    filterProfilesByUserType();
-    
-    // Renderizar filtro de categorías
+    // No llamar filterProfilesByUserType() aquí: reseteaba currentIndex en cada render
+    // y hacía que siempre se viera la misma card. El filtrado se hace en showMainApp,
+    // filterByCategory y fetchProfiles.
     renderCategoryFilter();
     
     const cardsStack = document.getElementById('cardsStack');
     const emptyState = document.getElementById('emptyState');
     
     if (!state.profiles || state.profiles.length === 0) {
-        if (cardsStack) cardsStack.innerHTML = '';
+        if (cardsStack) { cardsStack.innerHTML = ''; cardsStack.style.display = 'none'; }
         if (emptyState) {
             emptyState.innerHTML = `
                 <h2>¡No hay perfiles disponibles!</h2>
@@ -1861,13 +2236,13 @@ function renderCards() {
                     ? 'No hay candidatos disponibles en este momento. Vuelve más tarde.' 
                     : 'No hay ofertas de trabajo disponibles en este momento. Vuelve más tarde.'}</p>
             `;
-            emptyState.style.display = 'block';
+            emptyState.style.display = 'flex';
         }
         return;
     }
     
     if (state.currentIndex >= state.profiles.length) {
-        if (cardsStack) cardsStack.innerHTML = '';
+        if (cardsStack) { cardsStack.innerHTML = ''; cardsStack.style.display = 'none'; }
         if (emptyState) {
             emptyState.innerHTML = `
                 <h2>¡No hay más perfiles disponibles!</h2>
@@ -1875,11 +2250,12 @@ function renderCards() {
                     ? 'Has visto todos los candidatos disponibles. Vuelve más tarde para ver nuevos perfiles.' 
                     : 'Has visto todas las ofertas disponibles. Vuelve más tarde para ver nuevas oportunidades.'}</p>
             `;
-            emptyState.style.display = 'block';
+            emptyState.style.display = 'flex';
         }
         return;
     }
     
+    if (cardsStack) cardsStack.style.display = '';
     if (emptyState) emptyState.style.display = 'none';
     
     const currentProfile = state.profiles[state.currentIndex];
@@ -2041,23 +2417,36 @@ function setupCardListeners(card) {
 }
 
 function handleSwipe(direction) {
-    if (state.currentIndex >= state.profiles.length) return;
-    
-    const currentProfile = state.profiles[state.currentIndex];
+    // Obtener el perfil de la card visible (por DOM) para que el match muestre siempre la empresa/oferta correcta
+    const topCard = document.querySelector('.professional-card.card-top');
+    let currentProfile = null;
+    if (topCard) {
+        const profileId = topCard.getAttribute('data-profile-id') || topCard.getAttribute('data-id');
+        if (profileId !== null && profileId !== '') {
+            const id = typeof state.profiles[0]?.id === 'number' ? parseInt(profileId, 10) : profileId;
+            currentProfile = state.profiles.find(p => p.id === id || p.id === profileId);
+        }
+        if (!currentProfile) currentProfile = state.profiles[state.currentIndex];
+    } else {
+        currentProfile = state.profiles[state.currentIndex];
+    }
+    if (!currentProfile || state.currentIndex >= state.profiles.length) return;
+
     state.swipedProfiles.push(currentProfile.id);
-    
+
     if (direction === 'right') {
         if (Math.random() > 0.7) {
-            state.matchedProfiles.push(currentProfile.id);
+            if (!state.matchedProfiles.includes(currentProfile.id)) state.matchedProfiles.push(currentProfile.id);
+            const profileToShow = { ...currentProfile };
             setTimeout(() => {
-                showMatchOverlay(currentProfile);
+                showMatchOverlay(profileToShow);
             }, 500);
         }
         addActivity('Interesado en ' + currentProfile.name, 'Has mostrado interés');
     } else {
         addActivity('Pasaste a ' + currentProfile.name, 'Continuemos buscando');
     }
-    
+
     state.currentIndex++;
     
     const card = document.querySelector('.card-top');
@@ -2099,7 +2488,13 @@ function renderMatches() {
         return;
     }
     
-    matchesGrid.innerHTML = matches.map(profile => `
+    matchesGrid.innerHTML = matches.map(profile => {
+        const isJob = profile.role === 'job';
+        const attrs = isJob
+            ? [profile.companyName && `🏢 ${profile.companyName}`, profile.location && `📍 ${profile.location}`, profile.industry].filter(Boolean).slice(0, 3)
+            : [profile.location && `📍 ${profile.location}`, profile.experience].filter(Boolean).slice(0, 2);
+        const attrsLine = attrs.length ? attrs.join(' · ') : '';
+        return `
         <div class="match-card" data-profile-id="${profile.id}">
             <div class="match-card-main">
                 <div class="match-card-image-container">
@@ -2108,38 +2503,62 @@ function renderMatches() {
                 </div>
                 <div class="match-card-content">
                     <h3>${profile.name}</h3>
-                    <p>${profile.description}</p>
-                    <div class="card-tags">
-                        ${profile.techStack.slice(0, 3).map(tech => `<span class="tag">${tech}</span>`).join('')}
+                    ${isJob && profile.tagline ? `<p class="match-card-tagline">${profile.tagline}</p>` : ''}
+                    <p class="match-card-description">${isJob ? (profile.company_description || profile.description || '') : profile.description}</p>
+                    ${attrsLine ? `<p class="match-card-attrs">${attrsLine}</p>` : ''}
+                    <div class="match-card-tags">
+                        ${(profile.techStack || []).slice(0, 5).map(tech => `<span class="tag">${tech}</span>`).join('')}
                     </div>
                     <div class="match-card-actions">
                         <button class="message-button" onclick="openChat('${profile.id}')" title="Enviar mensaje">
                             <span class="message-icon">💬</span>
-                            <span class="message-text">Mensaje</span>
+                            <span class="message-text">Contactame</span>
                         </button>
                         <button class="view-profile-button" onclick="viewMatchProfile('${profile.id}')" title="Ver detalles">
                             <span class="view-icon" id="view-icon-${profile.id}">▼</span>
-                            <span class="view-text">Ver Detalles</span>
+                            <span class="view-text">Ver Información</span>
                         </button>
                     </div>
                 </div>
             </div>
-            <!-- Panel de información lateral (escritorio) / debajo (móvil) -->
             <div class="match-profile-details" id="match-details-${profile.id}" style="display: none;">
                 ${createMatchDetailsHTML(profile)}
             </div>
         </div>
-    `).join('');
+    `;
+    }).join('');
 }
 
 function createMatchDetailsHTML(profile) {
     const isCandidate = profile.role === 'candidate';
     const isJob = profile.role === 'job';
-    
+    let attachmentsHTML = '';
+    if (isCandidate && profile.user_id && typeof Database !== 'undefined') {
+        const user = Database.getUserById(profile.user_id);
+        const attachments = user && user.attachments && user.attachments.length ? user.attachments : [];
+        if (attachments.length) {
+            attachmentsHTML = `
+                <div class="match-details-attachments">
+                    <h4 class="tech-stack-title">Documentos adjuntos (CV, certificaciones)</h4>
+                    <ul class="match-attachments-list">
+                        ${attachments.map((att, i) => `
+                            <li class="match-attachment-item">
+                                <a href="${att.data}" download="${(att.name || 'documento').replace(/"/g, '')}" target="_blank" rel="noopener" class="match-attachment-link">📎 ${att.name || 'Documento'}</a>
+                            </li>
+                        `).join('')}
+                    </ul>
+                </div>
+            `;
+        }
+    }
+    const techStack = profile.techStack && Array.isArray(profile.techStack) ? profile.techStack : [];
     return `
         <div class="match-details-content">
             <h3 class="match-details-title">${isCandidate ? 'Información del Candidato' : 'Detalles de la Oferta'}</h3>
-            <p class="match-details-description">${profile.detailedDescription}</p>
+            ${profile.tagline ? `<p class="match-details-tagline">${profile.tagline}</p>` : ''}
+            ${isJob && profile.company_description ? `<p class="match-details-description match-details-company-block">${profile.company_description}</p>` : ''}
+            ${isCandidate && profile.about_me ? `<p class="match-details-description match-details-candidate-block">${profile.about_me}</p>` : ''}
+            <p class="match-details-description">${profile.detailedDescription || profile.description || ''}</p>
             ${isCandidate ? `
                 <div class="match-details-info">
                     ${profile.experience ? `<div class="detail-item"><strong>Experiencia:</strong> ${profile.experience}</div>` : ''}
@@ -2156,14 +2575,16 @@ function createMatchDetailsHTML(profile) {
                     ${profile.industry ? `<div class="detail-item"><strong>Industria:</strong> ${profile.industry}</div>` : ''}
                     ${profile.companySize ? `<div class="detail-item"><strong>Tamaño de empresa:</strong> ${profile.companySize}</div>` : ''}
                     ${profile.category ? `<div class="detail-item"><strong>Categoría:</strong> ${profile.category}</div>` : ''}
+                    ${profile.salary ? `<div class="detail-item"><strong>💰 Rango salarial:</strong> ${profile.salary}</div>` : ''}
                 </div>
             ` : ''}
             <div class="match-details-tech">
                 <h4 class="tech-stack-title">${isCandidate ? 'Stack Tecnológico:' : 'Tecnologías Requeridas:'}</h4>
                 <div class="tech-stack-list">
-                    ${profile.techStack.map(tech => `<span class="tag">${tech}</span>`).join('')}
+                    ${techStack.map(tech => `<span class="tag">${tech}</span>`).join('')}
                 </div>
             </div>
+            ${attachmentsHTML}
         </div>
     `;
 }
@@ -2229,18 +2650,21 @@ function showMatchOverlay(profile) {
     const overlay = document.getElementById('matchOverlay');
     const subtitle = document.getElementById('matchSubtitle');
     const profileDiv = document.getElementById('matchProfile');
-    
-    if (subtitle) subtitle.textContent = `Has hecho match con ${profile.name}`;
-    if (profileDiv) {
+    const isJob = profile && profile.role === 'job';
+    const displayName = profile ? profile.name : '';
+    const displayDesc = profile ? (isJob && profile.companyName ? `${profile.companyName} · ${profile.location || ''}`.trim() : (profile.description || '')) : '';
+
+    if (subtitle) subtitle.textContent = isJob ? `Has hecho match con ${profile.companyName || profile.name}` : `Has hecho match con ${displayName}`;
+    if (profileDiv && profile) {
         profileDiv.innerHTML = `
             <img src="${profile.imageUrl}" alt="${profile.name}" class="match-image">
             <div class="match-info">
                 <h2 class="match-name">${profile.name}</h2>
-                <p class="match-description">${profile.description}</p>
+                <p class="match-description">${displayDesc || profile.description || ''}</p>
             </div>
         `;
     }
-    
+
     if (overlay) overlay.style.display = 'flex';
 }
 
@@ -2362,53 +2786,68 @@ function handleCreateJob(e) {
     }
     
     const locationText = location === 'remote' ? 'Remoto' : location === 'hybrid' ? 'Híbrido' : 'Presencial';
+    const category = state.currentUser.industry === 'Salud' ? 'Salud' : (state.currentUser.industry || 'Tecnología');
+    
+    // Persistir en la base de datos si está disponible
+    let newJobId = 'job-' + Date.now();
+    if (typeof Database !== 'undefined' && Database.createJobProfile) {
+        const saved = Database.createJobProfile(state.currentUser.id, {
+            title: title,
+            name: title,
+            description: `${locationText} - ${state.currentUser.companyName || 'Empresa'}`,
+            detailed_description: description,
+            tagline: title,
+            company_description: state.currentUser.description || description,
+            tech_stack: techStack,
+            salary: salary,
+            location: locationText,
+            category: category
+        });
+        if (saved) newJobId = saved.id;
+    }
     
     const newJob = {
-        id: 'job-' + Date.now(),
+        id: newJobId,
         title: title,
         description: description,
         salary: salary,
         location: locationText,
         techStack: techStack,
         active: true,
+        category: category,
         createdAt: new Date().toISOString()
     };
     
     state.companyJobs.push(newJob);
     
-    // Agregar a todos los perfiles disponibles (para que aparezca en la lista de ofertas)
+    // Agregar a todos los perfiles para que empleados vean la oferta en Discover (también se persiste en DB y se carga al refrescar)
     const newJobProfile = {
-        id: newJob.id,
+        id: newJobId,
+        user_id: state.currentUser.id,
         name: title,
         description: `${locationText} - ${state.currentUser.companyName || 'Empresa'}`,
         detailedDescription: description,
+        tagline: title,
+        company_description: state.currentUser.description || description,
         techStack: techStack,
         salary: salary,
         location: locationText,
         companyName: state.currentUser.companyName || 'Mi Empresa',
         companySize: state.currentUser.companySize || '11-50 empleados',
         industry: state.currentUser.industry || 'Tecnología',
-        category: state.currentUser.industry === 'Salud' ? 'Médicos' : 
-                 (state.currentUser.industry === 'Manufactura' || state.currentUser.industry === 'Industrial') ? 'Industrial' : 
-                 'Informática',
+        category: category,
         imageUrl: state.currentUser.imageUrl || 'https://images.unsplash.com/photo-1556761175-b413da4baf72?w=400&h=400&fit=crop',
-        role: 'job',
-        userType: 'company',
-        companyId: state.currentUser.id
+        role: 'job'
     };
     
     state.allProfiles.push(newJobProfile);
-    
-    // Si el usuario actual es empleado, actualizar la lista de perfiles filtrados
-    if (state.currentUser.type === 'employee') {
-        filterProfilesByUserType();
-    }
+    filterProfilesByUserType(); // actualiza state.profiles por si hay empleado en otra pestaña o tras cambiar de cuenta
     
     closeCreateJobModal();
     renderJobs();
     addActivity('Nueva oferta creada', `Has creado la oferta: ${title}`);
     
-    alert('Oferta de trabajo creada exitosamente');
+    showToast('Oferta de trabajo creada exitosamente');
 }
 
 // ===== INICIALIZACIÓN =====
@@ -2433,7 +2872,24 @@ document.addEventListener('DOMContentLoaded', () => {
             if (overlay) overlay.style.display = 'none';
         });
     }
+
+    // Pantalla de verificación (Paso 2 tras registro con API)
+    const authVerifyConfirmBtn = document.getElementById('authVerifyConfirmBtn');
+    const authVerifyResendBtn = document.getElementById('authVerifyResendBtn');
+    const authVerifyBackBtn = document.getElementById('authVerifyBackBtn');
+    if (authVerifyConfirmBtn) authVerifyConfirmBtn.addEventListener('click', handleAuthVerifyConfirm);
+    if (authVerifyResendBtn) authVerifyResendBtn.addEventListener('click', handleAuthVerifyResend);
+    if (authVerifyBackBtn) authVerifyBackBtn.addEventListener('click', handleAuthVerifyBack);
 });
+
+// Restablecer datos de ejemplo (empleados, ofertas, descripciones) desde la pantalla de login
+function resetDemoData() {
+    if (typeof Database === 'undefined') return;
+    if (!confirm('¿Restablecer datos de ejemplo? Se borrarán tus datos locales y se cargarán de nuevo los empleados y ofertas de ejemplo.')) return;
+    Database.reset();
+    location.reload();
+}
+window.resetDemoData = resetDemoData;
 
 // Funciones globales para HTML
 window.switchAuthTab = switchAuthTab;
@@ -2443,6 +2899,9 @@ window.showSection = showSection;
 window.handleLogout = handleLogout;
 window.editProfileImage = editProfileImage;
 window.saveProfile = saveProfile;
+window.handleProfileImageFile = handleProfileImageFile;
+window.handleAttachmentFiles = handleAttachmentFiles;
+window.removeAttachment = removeAttachment;
 window.flipCardBack = flipCardBack;
 window.clearAuthErrors = clearAuthErrors;
 window.togglePasswordVisibility = togglePasswordVisibility;
@@ -2466,3 +2925,4 @@ function toggleMobileMenu() {
 }
 
 window.toggleMobileMenu = toggleMobileMenu;
+
